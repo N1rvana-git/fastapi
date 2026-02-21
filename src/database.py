@@ -13,14 +13,11 @@ POSTGRES_INDEXES_NAMING_CONVENTION = {#命名约定
 #创建metadata实例并应用约定
 metadata_obj = MetaData(naming_convention=POSTGRES_INDEXES_NAMING_CONVENTION)
 
-#base类使用带约定的metabata
-class Bse(DeclarativeBase):
+#通过继承 Base，SQLAlchemy 的"声明式系统"(DeclarativeBase)
+#就能自动"发现" UserModel 和 ItemModel，并知道它们是需要被 Alembic 管理的数据库表。
+#Base类使用带约定的metadata
+class Base(DeclarativeBase):
     metadata = metadata_obj
 
 engine = create_async_engine(settings.DATABASE_URL)
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
-
-#通过继承 Base，SQLAlchemy 的“声明式系统”(DeclarativeBase)
-#就能自动“发现” UserModel 和 ItemModel，并知道它们是需要被 Alembic 管理的数据库表。
-class Base(DeclarativeBase):
-    pass
