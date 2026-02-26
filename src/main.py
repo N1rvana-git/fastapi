@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from src.posts import router as posts_router, models
+from src.posts.router import router as posts_router
+from src.posts import models
 from src.config import settings
 from health.router import router as health_router
 from src.users.router import router as users_router

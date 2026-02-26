@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List, Optional
-
+from sqlalchemy import select
 from . import schemas
 from . import service
 from . import models
@@ -90,3 +90,22 @@ async def update_item(
     # 4. 执行更新
     updated_item = await service.update_item(db=db, db_item=db_item, item_update=item_update)
     return updated_item
+
+@router.post("/tags/", response_model=schemas.Tag)
+async def create_tag(
+    tag: schemas.TagCreate,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: models.UserModel = Depends(get_current_user)
+):
+    """创建标签接口"""
+    db_tag = await service.create_tag(db=db, tag_name=tag.name)
+    return db_tag
+
+@router.get("/tags/", response_model=List[schemas.Tag])
+async def read_tags(
+    db: AsyncSession = Depends(get_db_session)
+):
+    """查询标签列表接口"""
+    result = await db.execute(select(models.item_TagModel))
+    tags = result.scalars().all()
+    return tags
