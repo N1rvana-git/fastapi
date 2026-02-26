@@ -41,3 +41,9 @@ class CreateItemWithUserResponse(BaseModel):
     username: Union[str, None] = None
     
     model_config = ConfigDict(from_attributes=True)
+
+class ItemBase(BaseModel):
+    name: str
+    price: float
+    is_offer: Union[bool, None] = None
+    image_url: Union[str, None] = None

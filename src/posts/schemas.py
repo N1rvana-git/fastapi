@@ -16,6 +16,7 @@ class ItemBase(BaseModel):
     name: str
     price: float
     is_offer: Union[bool, None] = None
+    image_path: Union[str, None] = None  # 新增图片路径字段
 
 # 专门用于"创建"的模型
 class ItemCreate(ItemBase):

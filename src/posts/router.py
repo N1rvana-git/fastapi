@@ -1,5 +1,7 @@
 #处理http请求
-from fastapi import APIRouter, Depends, Query, HTTPException
+import os
+import shutil
+from fastapi import APIRouter, Depends, Query, HTTPException,File, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List, Optional
@@ -21,10 +23,26 @@ async def create_new_item(
     db: AsyncSession = Depends(get_db_session),
     current_user: models.UserModel = Depends(get_current_user)
 ):
-    """创建接口：使用 ItemCreate 模型，并强制要求登录"""
+    """创建接口：使用 JSON `ItemCreate` 模型（图片需先上传获取路径）"""
     # 调用 service，传入 current_user.id 作为 owner_id
     db_item = await service.create_item(db=db, item=item, owner_id=current_user.id)
     return db_item
+
+@router.post("/upload-image/")
+async def upload_image(file: UploadFile = File(...)):
+    """专门的图片上传接口"""
+    # 确保目录存在
+    upload_dir = "uploads"
+    if not os.path.exists(upload_dir):
+        os.makedirs(upload_dir)
+    
+    # 保存文件
+    file_location = f"{upload_dir}/{file.filename}"
+    with open(file_location, "wb+") as file_object:
+        shutil.copyfileobj(file.file, file_object)
+    
+    # 返回可访问的 URL 路径
+    return {"filename": file.filename, "url": f"/uploads/{file.filename}"}
 
 @router.get("/", response_model=List[schemas.Item])
 async def read_items_from_db(

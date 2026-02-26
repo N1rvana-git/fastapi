@@ -11,11 +11,15 @@ class ItemModel(Base):
     price = Column(Float)
     is_offer = Column(Boolean,default=True)
     
+    # 新增图片路径字段
+    image_path = Column(String, nullable=True)
+
     # 外键：指向 users 表的 id 列
     owner_id = Column(Integer, ForeignKey("users.id"))
     
     # 关系：反向查主人
     owner = relationship("UserModel", back_populates="items")
+    # 关系：多对多查标签
     tags = relationship("item_TagModel", secondary="item_tag", back_populates="items", lazy="selectin")
 
 class UserModel(Base):

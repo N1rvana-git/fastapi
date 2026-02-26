@@ -42,3 +42,7 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# User uploads
+uploads/
+static/images/

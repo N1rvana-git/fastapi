@@ -196,3 +196,78 @@ async def test_create_and_update_item(async_client: AsyncClient):
     assert response_delete.status_code == 204
     response_check_deleted = await async_client.get(f"/items/")
     assert len(response_check_deleted.json()) == 0
+
+@pytest.mark.asyncio
+async def test_create_and_update_item(async_client: AsyncClient):
+        # 1. 注册一个新用户
+    register_response = await async_client.post(
+        "/users/", 
+        json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "password": "ValidPassword123"
+        }
+    )
+    assert register_response.status_code == 200
+
+    # 2. 登录以获取 Token (注意：登录接口用的是 form-data 格式，所以用 data=)
+    login_response = await async_client.post(
+        "/token", 
+        data={
+            "username": "test@example.com", 
+            "password": "ValidPassword123"
+        }
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["access_token"]
+    
+    # 3. 准备带有 Token 的请求头
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 4. 创建物品 (携带 Header！)
+    test_item_json = {
+        "name": "Test Item", 
+        "price": 123.45, 
+        "is_offer": False
+    }
+    response_post = await async_client.post(
+        "/items/", 
+        json=test_item_json,
+        headers=headers  # <--- 关键：出示“身份证”
+    )
+    assert response_post.status_code == 200
+    
+    response_data = response_post.json()
+    assert response_data["name"] == "Test Item"
+    assert response_data["price"] == 123.45
+    assert "id" in response_data       # 确保返回了 id
+    assert "owner_id" in response_data # 确保绑定了主人
+
+    # 5.造标签
+    item_tags_response = await async_client.post(
+        "/items/tags/",
+        json={"name": "TestTag1"},
+        headers=headers
+    )
+    assert item_tags_response.status_code == 200
+    tag_data = item_tags_response.json()
+    assert tag_data["name"] == "TestTag1"
+    
+    tags_new_id = tag_data["id"]
+
+    # 6.给物品加上标签
+    reponse_put_tags = await async_client.put(
+        f"/items/{response_data['id']}",
+        json={
+            "price": 888.88,
+            "tag_ids": [tags_new_id]
+            },
+        headers=headers
+    )
+    assert reponse_put_tags.status_code == 200
+    
+    # 7. 验证标签是否成功关联
+    updated_item_data = reponse_put_tags.json()
+    assert "tags" in updated_item_data
+    assert len(updated_item_data["tags"]) == 1
+    assert updated_item_data["tags"][0]["name"] == "TestTag1"
