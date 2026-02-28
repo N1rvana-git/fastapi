@@ -1,7 +1,7 @@
 #处理http请求
 import os
 import shutil
-from fastapi import APIRouter, Depends, Query, HTTPException,File, UploadFile, Form
+from fastapi import APIRouter, Depends, Query, HTTPException,File, UploadFile, Form,BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List, Optional
@@ -11,11 +11,16 @@ from . import service
 from . import models
 from .dependencies import get_db_session
 from src.auth.dependencies import get_current_user
-
+import asyncio
+import json
+from src.config import settings
+import redis.asyncio as aioredis
 router = APIRouter(
     prefix="/items",
     tags=["items"]
 )
+
+redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
 
 @router.post("/", response_model=schemas.Item)
 async def create_new_item(
@@ -28,8 +33,18 @@ async def create_new_item(
     db_item = await service.create_item(db=db, item=item, owner_id=current_user.id)
     return db_item
 
+# 一个用来处理图片的普通函数
+async def process_image_in_background(filename: str):
+    """模拟一个耗时的图片处理任务"""
+    print(f"⏳ [后台任务开始] 正在处理图片：{filename}...")
+    await asyncio.sleep(5)  # 模拟处理时间
+    print(f"✅ [后台任务完成] 图片处理完成：{filename}")
+
 @router.post("/upload-image/")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks()
+    ):
     """专门的图片上传接口"""
     # 确保目录存在
     upload_dir = "uploads"
@@ -41,8 +56,12 @@ async def upload_image(file: UploadFile = File(...)):
     with open(file_location, "wb+") as file_object:
         shutil.copyfileobj(file.file, file_object)
     
+    background_tasks.add_task(process_image_in_background, filename=file.filename)
     # 返回可访问的 URL 路径
-    return {"filename": file.filename, "url": f"/uploads/{file.filename}"}
+    return {
+        "filename": file.filename, 
+        "url": f"/uploads/{file.filename}",
+        "message": "图片上传成功，正在后台处理..."}
 
 @router.get("/", response_model=List[schemas.Item])
 async def read_items_from_db(
@@ -119,11 +138,27 @@ async def create_tag(
     db_tag = await service.create_tag(db=db, tag_name=tag.name)
     return db_tag
 
-@router.get("/tags/", response_model=List[schemas.Tag])
-async def read_tags(
-    db: AsyncSession = Depends(get_db_session)
-):
-    """查询标签列表接口"""
-    result = await db.execute(select(models.item_TagModel))
+@router.get("/tags/")
+async def read_tags(db: AsyncSession = Depends(get_db_session)):
+    """查询标签列表接口 (加入了 1 毫秒极速 Redis 缓存)"""
+    
+    # 🌟 1. 尝试从 Redis 内存中找找看有没有叫 "all_tags" 的缓存
+    cached_tags = await redis_client.get("all_tags")
+    
+    if cached_tags:
+        # 如果缓存里有，直接起飞！不用去打扰 PostgreSQL 数据库
+        print("🚀 [缓存命中] 直接从 Redis 内存秒回数据！")
+        return json.loads(cached_tags) 
+        
+    # 🌟 2. 如果缓存里没有（比如第一次访问，或者缓存过期了）
+    print("🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...")
+    result = await db.execute(select(models.item_TagModel))  
     tags = result.scalars().all()
-    return tags
+    
+    # 🌟 3. 把查出来的数据整理一下，存一份到 Redis 里
+    tags_list = [{"id": tag.id, "name": tag.name} for tag in tags]
+    
+    # 存入 Redis，并且设置 ex=60，意思是这层缓存只存活 60 秒！
+    await redis_client.set("all_tags", json.dumps(tags_list), ex=60)
+    
+    return tags_list

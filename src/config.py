@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     ENVIRONMENT:str="development"
     DATABASE_URL:str="sqlite+aiosqlite:///./test.db"# Pydantic 会自动从 .env 读取它
     
+    REDIS_URL:str="redis://127.0.0.1:6379/0"
+
     # JWT 认证配置
     SECRET_KEY: str = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
     ALGORITHM: str = "HS256"

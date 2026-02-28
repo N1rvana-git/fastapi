@@ -1,0 +1,35 @@
+# 图片与上传功能
+
+#1.编写接受图片的Api接口
+@router.post("/upload-image/")
+async def upload_image(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: models.UserModel = Depends(get_current_user)
+):
+    """上传图片接口"""
+    # 1. 先把文件读出来
+    contents = await file.read()
+    
+    # 2.保存到一个叫uploads的文件夹里，文件名用UUID生成，保持唯一性
+    import uuid
+    import os
+    filename = f"{uuid.uuid4()}_{file.filename}"
+    upload_dir = "uploads"
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, filename)
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    # 3.把图片的本地路径（或者可以访问的 URL）保存到数据库的 Item 表中
+    db_item = models.ItemModel(
+        name=file.filename,
+        price=0.0,
+        is_offer=False,
+        owner_id=current_user.id,
+        image_path=file_path  # 假设 ItemModel 有这个字段
+    )
+    db.add(db_item)
+    await db.commit()
+    await db.refresh(db_item)
+    return {"filename": file.filename, "file_path": file_path, "item_id": db_item.id}
