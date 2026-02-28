@@ -14,6 +14,8 @@ services:
       # ⚠️ 极其关键：在 Docker 内部的网络里，数据库的地址不再是 127.0.0.1，而是容器名 'db' 和 'redis'
       - DATABASE_URL=postgresql+asyncpg://myuser:mypassword@db:5432/mydb
       - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
 
   # 2. PostgreSQL 数据库服务
   db:
