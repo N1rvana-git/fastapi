@@ -13,6 +13,15 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 # access to the values within the .ini file in use.
 config = context.config
 
+# 🌟🌟🌟 新增这三行：强制 Alembic 读取我们的云端配置！
+import os
+from src.config import settings
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# 🌟🌟🌟 新增结束
+
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:

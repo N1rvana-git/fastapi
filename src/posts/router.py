@@ -20,7 +20,7 @@ router = APIRouter(
     tags=["items"]
 )
 
-redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+redis_client = aioredis.Redis(host='redis', port=6379, db=0, decode_responses=True)
 
 @router.post("/", response_model=schemas.Item)
 async def create_new_item(

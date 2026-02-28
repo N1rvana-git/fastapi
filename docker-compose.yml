@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # 1. 我们的 FastAPI 后端服务
+  web:
+    build: .                 # 告诉 Docker，根据当前目录的 Dockerfile 构建镜像
+    container_name: fastapi_app
+    ports:
+      - "8000:8000"          # 把容器内的 8000 端口暴露出来
+    depends_on:
+      - db                   # 启动顺序：必须先启动数据库和缓存
+      - redis
+    environment:
+      # ⚠️ 极其关键：在 Docker 内部的网络里，数据库的地址不再是 127.0.0.1，而是容器名 'db' 和 'redis'
+      - DATABASE_URL=postgresql+asyncpg://myuser:mypassword@db:5432/mydb
+      - REDIS_URL=redis://redis:6379/0
+
+  # 2. PostgreSQL 数据库服务
+  db:
+    image: postgres:15-alpine # 直接拉取官方轻量级镜像
+    container_name: postgres_db
+    environment:
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=mypassword
+      - POSTGRES_DB=mydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data # 数据持久化，防止容器重启后数据清空
+
+  # 3. Redis 缓存服务
+  redis:
+    image: redis:alpine
+    container_name: redis_cache
+    ports:
+      - "6379:6379"
+
+# 声明用来保存数据库数据的“虚拟硬盘”
+volumes:
+  pgdata:
