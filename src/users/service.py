@@ -28,7 +28,7 @@ async def create_user(db:AsyncSession,user:schemas.UserCreate) -> models.UserMod
         email = user.email,
         hashed_password = hashed_password,
         age = user.age if user.age is not None else 0,  # 默认值满足非空约束
-        phone = user.phone
+        phone = str(user.phone) if user.phone is not None else None
     )
     db.add(db_user)
     await db.commit()

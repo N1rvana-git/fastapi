@@ -11,14 +11,19 @@ from src.users.router import router as users_router
 from src.auth.router import router as auth_router
 
 app = FastAPI(title="我的全栈二手平台")  # 或者 title=settings.APP_NAME
+app = FastAPI(title="我的全栈二手平台")
 
-# 1. 配置跨域通行证 (CORS) - 这一步非常重要，必须放在最前面
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允许所有来源
-    allow_credentials=True, # 允许携带 cookie
-    allow_methods=["*"],  # 允许所有 HTTP 方法
-    allow_headers=["*"],  # 允许所有 HTTP 头
+    # 允许访问的前端地址，注意：千万不要在网址最后加斜杠 "/"
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://jubilant-yodel-4jr9qx56jv9q3qrxg.github.dev/"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许所有的请求方式 (GET, POST 等)
+    allow_headers=["*"],  # 允许所有的请求头
 )
 
 # 2. 准备静态文件目录

@@ -6,13 +6,13 @@ class UserCreate(BaseModel):#输入
     password: str
     email: str
     age: Union[int,None] = None
-    phone: Union[int,None] = None
+    phone: Union[str,None] = None
 
 class UserPublic(BaseModel):#输出
     id: int
     username: str
     email: str
     age: Union[int,None] = None
-    phone: Union[int,None] = None
+    phone: Union[str,None] = None
 
     model_config = ConfigDict(from_attributes=True)
