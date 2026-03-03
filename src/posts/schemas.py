@@ -17,6 +17,7 @@ class ItemBase(BaseModel):
     price: float
     is_offer: Union[bool, None] = None
     image_path: Union[str, None] = None  # 新增图片路径字段
+    
 
 # 专门用于"创建"的模型
 class ItemCreate(ItemBase):
@@ -28,7 +29,8 @@ class ItemUpdate(BaseModel):
     price: Union[float, None] = None
     is_offer: Union[bool, None] = None
     tag_ids: Union[List[int], None] = None # 新增：更新物品时可以指定标签 ID 列表
-
+    image_path: Union[str, None] = None
+    
 # 专门用于"读取/响应"的模型
 class Item(ItemBase):
     id: int
