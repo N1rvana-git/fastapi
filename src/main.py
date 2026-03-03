@@ -19,7 +19,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://jubilant-yodel-4jr9qx56jv9q3qrxg.github.dev/"
+        "https://jubilant-yodel-4jr9qx56jv9q3qrxg.app.github.dev",
+        "https://jubilant-yodel-4jr9qx56jv9q3qrxg-5173.app.github.dev",
+        "https://jubilant-yodel-4jr9qx56jv9q3qrxg.github.dev"
     ],
     allow_credentials=True,
     allow_methods=["*"],  # 允许所有的请求方式 (GET, POST 等)
