@@ -1,10 +1,11 @@
-#处理http请求
+
 import os
 import asyncio
 import shutil
-from fastapi import APIRouter, Depends, Query, HTTPException,File, UploadFile, Form,BackgroundTasks
+from fastapi import APIRouter, Depends, Query, HTTPException,File, UploadFile, Form,BackgroundTasks,status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from sqlalchemy import select
 from . import schemas
@@ -16,7 +17,7 @@ import asyncio
 import json
 from src.config import settings
 import redis.asyncio as aioredis
-from sqlalchemy import select,func
+from sqlalchemy import select,func,delete,desc
 from sqlalchemy.orm import selectinload
 from .storage import current_storage
 from .dependencies import get_db_session
@@ -90,6 +91,8 @@ async def read_items_from_db(
 
     #1.构造一个查询图纸
     query = select(models.ItemModel)
+    # 🌟 新增：永远只查出没有被卖掉的商品！
+    query = query.where(models.ItemModel.is_sold == False)
     if is_offer_filter is not None:
         query = query.where(models.ItemModel.is_offer == is_offer_filter)
     if search:
@@ -226,6 +229,61 @@ async def toggle_favorite(
     await db.commit()
     return {"message": action_msg}
 
+#新增核心交易链路：安全下单接口 (带防超卖悲观锁)
+@router.post("/{item_id}/buy")
+async def buy_item(
+    item_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: models.UserModel = Depends(get_current_user)
+):
+    """安全下单接口 (带防超卖悲观锁)"""
+    # 1. 先把物品查出来，并且加上悲观锁（FOR UPDATE）
+    query = select(models.ItemModel).where(models.ItemModel.id == item_id).with_for_update()
+    result = await db.execute(query)
+    item = result.scalars().first()
+    
+    if not item:
+        raise HTTPException(status_code=404, detail="商品不存在")
+    
+    if item.is_sold:
+        raise HTTPException(status_code=400, detail="手慢了，该宝贝已被抢购一空！")
+
+    #不能购买自己发布的商品
+    if item.owner_id == current_user.id:
+        raise HTTPException(status_code=400, detail="不能购买自己发布的商品！")
+
+    # 4. 拦截器：求购贴不能“被购买”
+    if not item.is_offer:
+        raise HTTPException(status_code=400, detail="这是求购贴，不能被购买！")
+    
+    try:
+        # ✅ 所有检查通过，开始“一手交钱，一手交货”
+        
+        # 将商品标记为已售出
+        item.is_sold = True
+        
+        # 生成真实订单 (这里为了极速体验，我们直接将状态设为 'paid' 已付款)
+        new_order = models.OrderModel(
+            item_id=item_id,
+            buyer_id=current_user.id,
+            status="paid" 
+        )
+        db.add(new_order)
+        
+        # 提交事务：订单生成和商品状态更新同时生效，然后释放那把“悲观锁”
+        await db.commit()
+        
+        return {
+            "message": "🎉 恭喜你，抢购成功！", 
+            "order_id": new_order.id,
+            "item_name": item.name
+        }
+        
+    except Exception as e:
+        # 如果中间发生任何意外，数据回滚，坚决不产生脏数据！
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="服务器开小差了，购买失败！")
+
 ai_client = ZhipuAI(
     api_key = "b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v"
 )
@@ -238,100 +296,113 @@ class AgentRequest(BaseModel):
     history: Optional[List[Message]] = None
     messages: Optional[List[Message]] = None  # 支持标准的messages结构
 
-# === 🌟 AI Agent 阶段 2：赋予寻找商品的双手 ===
+# === 🌟 彻底删除之前的 tools 遗留代码，保持清爽 ===
 
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_items",
-            "description": "根据关键词查询平台上的商品（包括出售和求购）",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "keyword": {
-                        "type": "string",
-                        "description": "搜索关键词，如果不提供则返回所有商品"
-                    }
-                },
-                "required": []
-            }
-        }
-    }
-]
-
-@router.post("/ai/agent")
-async def agent_with_tools(request: AgentRequest, db: AsyncSession = Depends(get_db_session)):
-    print(f"\n🧠 [Agent 核心] 收到包含 {len(request.history or request.messages or [])} 条记忆的对话请求")
+# === 🌟 双子星 1号：记忆提取接口 (支持分页/上滑加载) ===
+@router.get("/ai/history/")
+async def get_ai_history(
+    skip: int = 0,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db_session),
+    current_user = Depends(get_current_user)
+):
+    """获取 AI 聊天历史接口 (支持分页)"""
+    # 直接查询数据库，where 已经保证了数据隔离，不需要画蛇添足的 if 判断
+    query = (
+        select(models.AIChatRecord)
+        .where(models.AIChatRecord.user_id == current_user.id)
+        .order_by(desc(models.AIChatRecord.created_at))
+        .offset(skip)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    records = result.scalars().all()
     
-    # 1. 组装上下文：System Prompt 洗脑包 + 前端传来的全部历史记录
-    system_msg = {"role": "system", "content": "你是闲小宝，一个二手交易平台的 AI 管家。如果有需要，请善用你的工具来回答用户问题。"}
-    messages = [system_msg]
-    for msg in (request.history or request.messages or []):
+    # 查出来后把顺序倒回来，变成正常的聊天顺序
+    records.reverse()
+    
+    return [{"role": r.role, "content": r.content, "timestamp": r.created_at.isoformat()} for r in records]
+
+
+# === 🌟 双子星 2号：一键失忆接口 (DELETE) ===
+# 🚨 确保这里的路径和 GET 一模一样，只是请求方法不同！
+@router.delete("/ai/history/")
+async def delete_ai_history(
+    db: AsyncSession = Depends(get_db_session),
+    current_user = Depends(get_current_user)
+):
+    print(f"🧹 [记忆管理] 收到用户 {current_user.username} 的专业级清除请求...")
+    # 精准打击，只删当前登录用户的聊天记录
+    await db.execute(delete(models.AIChatRecord).where(models.AIChatRecord.user_id == current_user.id))
+    await db.commit()
+    return {"message": "历史记忆已物理清除"}
+
+
+# === 🌟 核心大脑：带物理外挂的 Agent ===
+@router.post("/ai/agent")
+async def agent_with_tools(
+    request: AgentRequest, 
+    db: AsyncSession = Depends(get_db_session),
+    current_user = Depends(get_current_user) # 🌟 核心：知道是谁在聊天！
+):
+    history_list = request.history or request.messages or []
+    last_user_msg = history_list[-1].content if history_list else ""
+    print(f"\n🧠 [Agent 核心] 收到用户 {current_user.username} 的最新指令: {last_user_msg}")
+
+    # ===================================================
+    # 💾 记忆写入 1：保存用户刚刚说的话
+    # ===================================================
+    new_user_record = models.AIChatRecord(
+        user_id=current_user.id, role="user", content=last_user_msg
+    )
+    db.add(new_user_record)
+    await db.commit() # 存入硬盘！
+
+    # === 🌟 架构师外挂：穷人版意图拦截器 (RAG 架构) ===
+    trigger_words = ["什么", "卖", "买", "多少钱", "价格", "有", "卡", "电脑", "手机", "二手", "查"]
+    need_db_search = any(word in last_user_msg for word in trigger_words)
+    
+    messages = [
+        {"role": "system", "content": "你是闲小宝，一个二手交易平台的AI管家。说话幽默风趣。如果系统给你提供了数据，请直接根据数据回答，不要客套。"}
+    ]
+    
+    if need_db_search:
+        print("🔫 [物理外挂] 命中关键词！直接用 Python 查数据库！")
+        query = select(models.ItemModel).where(models.ItemModel.is_offer == True)
+        result = await db.execute(query)
+        items = result.scalars().all()
+        db_data_str = "当前没有任何商品。" if not items else "、".join([f"{item.name}(￥{item.price})" for item in items])
+        messages.append({
+            "role": "system", 
+            "content": f"【后台自动查询结果】：目前平台有以下商品：{db_data_str}。请直接用这段数据回答用户刚才的问题！"
+        })
+    # ==================================
+
+    # 拼装用户的聊天记录
+    for msg in history_list:
         messages.append({"role": msg.role, "content": msg.content})
 
-    if len(messages) == 1:
-        messages.append({"role": "user", "content": "你好，我是用户"})
-    print("🚀 [Agent] 发送至智谱的 messages =", messages)
-    
-    # 2. 带着完整的记忆去问 AI
+    if len(history_list) == 0:
+        messages.append({"role": "user", "content": "你好"})
+
+    print("🤖 [Agent 核心] 正在向云端大脑发送最终请求...")
     response = ai_client.chat.completions.create(
-        model="glm-4.5-flash",
+        model="glm-4.5-flash", 
         messages=messages,
-        tools=tools,
-        temperature=0.7
+        max_tokens=4096,
+        temperature=0.4 
     )
     
-    choice = response.choices[0]
+    reply = response.choices[0].message.content
+    print(f"✅ [Agent 核心] 最终回复: {reply}")
     
-    # 3. 处理工具调用（跟之前一样）
-    if choice.message.tool_calls:
-        tool_call = choice.message.tool_calls[0]
-        print(f"🔧 [Agent 核心] AI 决定使用工具: {tool_call.function.name}")
-        
-        if tool_call.function.name == "get_available_items":
-            query = select(models.ItemModel).where(models.ItemModel.is_offer == True)
-            result = await db.execute(query)
-            items = result.scalars().all()
-            
-            db_data_str = "当前平台没有任何在售商品。" if not items else "、".join([f"{item.name}(￥{item.price})" for item in items])
-            
-            # ✅ 架构师解药：手动提取干净的参数，剥离 OpenAI 的多余字段
-            # 1. 组装 AI 的请求动作
-            assistant_message = {
-                "role": "assistant",
-                "tool_calls": [
-                    {
-                        "id": tool_call.id,
-                        "type": "function",
-                        "function": {
-                            "name": tool_call.function.name,
-                            "arguments": tool_call.function.arguments
-                        }
-                    }
-                ]
-            }
-            # ⚠️ 核心魔法：只有当 AI 真的说了废话时，我们才加上 content 字段！
-            # 绝对不能传 "" 或者 None 给智谱！
-            if choice.message.content:
-                assistant_message["content"] = choice.message.content
-                
-            messages.append(assistant_message)
-            
-            # 2. 组装数据库的查询结果
-            messages.append({
-                "role": "tool",
-                "content": str(db_data_str), # 确保这里绝对是字符串
-                "tool_call_id": tool_call.id
-            })
-            
-            final_response = ai_client.chat.completions.create(
-                model="glm-4.5-flash",
-                messages=messages
-            )
-            return {"reply": final_response.choices[0].message.content}
-            
-    # 如果没调用工具，直接返回
-    return {"reply": choice.message.content}
-        
-        
+    # ===================================================
+    # 💾 记忆写入 2：保存 AI 的回复
+    # ===================================================
+    new_ai_record = models.AIChatRecord(
+        user_id=current_user.id, role="assistant", content=reply
+    )
+    db.add(new_ai_record)
+    await db.commit() # 再次存入硬盘！
+    
+    return {"reply": reply}

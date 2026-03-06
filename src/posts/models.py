@@ -1,7 +1,8 @@
 #区分“数据库表模型”（内部结构）和“API 模式”（外部合同）。
 #定义数据表
-from sqlalchemy import Column, Integer, String,Float,Boolean,ForeignKey,Table
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Table, Text, DateTime
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from src.database import Base
 
 class ItemModel(Base):
@@ -21,6 +22,8 @@ class ItemModel(Base):
     owner = relationship("UserModel", back_populates="items")
     # 关系：多对多查标签
     tags = relationship("item_TagModel", secondary="item_tag", back_populates="items", lazy="selectin")
+
+    is_sold = Column(Boolean, default=False)  # 新增：是否已售出
 
 class UserModel(Base):
     __tablename__ = "users"#把 Python 类映射成 PostgreSQL 表
@@ -51,3 +54,23 @@ class item_TagModel(Base):
     # 与 Item 的多对多关系：通过 secondary 指定上面定义的关联表
     items = relationship("ItemModel", secondary=item_tag_association, back_populates="tags")
 
+#新增：AI 管家永久记忆表
+class AIChatRecord(Base):
+    __tablename__ = "ai_chat_records"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String, nullable=False)  # "user" 或 "assistant"
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone = True),server_default=func.now())
+
+# 🛒 电商核心：订单状态机表
+class OrderModel(Base):
+    __tablename__ = "orders"
+    id = Column(Integer, primary_key=True, index=True)
+    buyer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    item_id = Column(Integer, ForeignKey("item.id", ondelete="RESTRICT"), nullable=False)
+    status = Column(String(20), default="pending", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # 建立 ORM 关系映射，方便我们写 Python 代码时直接一点就能获取到商品和买家信息
+    buyer = relationship("UserModel")
+    item = relationship("ItemModel")

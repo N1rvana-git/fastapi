@@ -1,152 +1,159 @@
 <div align="center">
 
-# ✨ 🛍️ 我的全栈二手平台 (Second-Hand Marketplace) ✨
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=250&section=header&text=二手交易平台%20Backend&fontSize=50&animation=fadeIn&fontAlignY=38&desc=基于%20FastAPI%20构建的现代化、全异步驱动智能交易社区&descAlignY=55&descAlign=62" />
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
-[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+![Python](https://img.shields.io/badge/Python-3.11+-blue.svg?style=for-the-badge&logo=python&logoColor=white) 
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi) 
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white) 
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)
+![ZhipuAI](https://img.shields.io/badge/AI_Agent-GLM_4.5-blueviolet?style=for-the-badge&logo=openai&logoColor=white)
 
-*一个功能强大、性能爆表的现代化 FastAPI 实战项目！ ヾ(≧▽≦*)o*
+<br/>
+
+> **✨ 欢迎来到这个充满魔法的代码仓库！这不仅仅是一个后端，它是为你打造的一体化交易世界引擎！ ✨**
 
 </div>
 
 ---
 
-## 🌟 项目简介 (Features) 
+## ☄️ 核心特性 (Features)
 
-欢迎来到这个超酷的全栈二手交易平台后端！ (❁´◡`❁) 本项目包含了企业级 Web 开发的各种进阶姿势，非常适合用来学习和作为脚手架使用~ 
+<details open>
+<summary><b>🔥 展开查看黑科技列表</b></summary>
 
-- 🛡️ **安全第一 (JWT Auth)**：基于 OAuth2 密码流的 Token 身份认证，保护你的每一个 API！
-- 👥 **用户系统 (User Management)**：安全可靠的密码哈希 (Bcrypt)，完善的注册与登录流。
-- 📦 **物品管理 (CRUD)**：完整的二手商品发布、查询、修删，自带严格的主人权限控制。
-- 🏷️ **智能标签 (Many-to-Many)**：高级的 SQLAlchemy 多对多关系，轻松给物品打上多个标签 `[数码, 二手, 九成新]`。
-- ⚡ **毫秒级缓存 (Redis)**：引入 AIORedis，让高频接口（如标签列表）起飞，直接从内存秒回数据！ 🚀
-- 🖼️ **异步处理 (Background Tasks)**：支持图片上传功能，并在后台默默为你处理耗时任务，一点都不卡顿哦~
-- 🤖 **AI 智能管家 (ZhipuAI / Agent)**：搭载了最新的大语言模型，理解用户意图并自动使用工具(Function Calling)搜索平台二手商品和求购信息。
-- 🐳 **容器化部署 (Docker)**：配置了 `docker-compose.yml`，一键拉起 Web + Postgres + Redis，环境配置不再让人头秃 `\(￣︶￣*\))`
+- 🛡️ **坚如磐石 (JWT Auth)**：基于 OAuth2 密码流的动态 Token 护盾，为你的每一个 API 请求保驾护航。
+- 🤖 **AI 智能中枢 (Agent Hub)**：接入 `ZhipuAI (GLM-4.5-Flash)`，带有强悍的函数调用能力（Function Calling），化身你的 24 小时私人交易管家，无论是买货还是卖货，一句话全搞定！
+- 📦 **全能仓储 (CRUDx)**：从简单的发布、浏览，到精细的主人级权限控制，一切皆可通过 RESTful 标准轻松操作。
+- 🕸️ **关系之网 (Many-to-Many)**：优雅的 SQLAlchemy M2M 拓扑结构，允许一个物品挂载无数张属性标签 `<二手><近全新><同城秒发>`。
+- ⚡ **光速响应 (Redis Cache)**：集成高性能 AIORedis，对于热点数据接口（如精选标签查询）实现真·毫秒级缓存直出！🚀
+- 🖼️ **异步无界 (Background Tasks)**：自带文件管理和后台异步图像处理系统，就算传了 10 个G，主线程也绝不阻塞半秒。
+- 🧱 **永不迷路 (Alembic Migration)**：全自动追踪模型定义的数据库迭代器，时光倒流和未来构建无缝顺滑。
+- 🐳 **容器领域 (Docker Compose)**：全自动化部署，将繁杂的环境依赖全部打包入舱，真真正正的 "一键起飞"。
+</details>
 
 ---
 
-## 🚀 极速启动 (Quick Start)
+## 🚀 极光启动 (Quick Start)
 
-我们要让代码跑起来！(๑•̀ㅂ•́)و✧ 
+我们要让代码飞起来！(๑•̀ㅂ•́)و✧ 
 
-### 方法一：🔥 自动化一键启动 (最新推荐) 
+### 🌟 方式一：自动化一键启动 (最新推荐！)
 
-告别各种繁琐的命令，本项目专门编写了极速启动脚本 `run.sh`。它能自动帮你**清理冲突端口、映射虚拟环境、强制构建 Docker 容器**。
+我们为你准备了「后悔药」级别防呆脚本 `run.sh`，自动**杀死串库进程、自动映射补全环境、强制无缝拉起容器组！**
 
-只需要执行：
 ```bash
+# 赋予魔法棒执行权限
 chmod +x run.sh
+
+# 见证奇迹的时刻
 ./run.sh
 ```
 
-### 方法二：🐳 Docker 手动启动
+---
+
+### 🐳 方式二：Docker 原教旨启动
+
+只要你懂 Docker，三行代码征服世界：
 
 ```bash
-# 一键拉起所有服务 (FastAPI + PostgreSQL + Redis)
+# 构建并分离挂载所有微服务 (API + 慢库 Postgres + 快库 Redis)
 docker compose up -d --build
 
-# 查看运行日志看看有没有报错~
+# 召唤飞行日志
 docker compose logs -f web
 ```
-> 🎉 **TADA!** 现在你可以访问自动生成的接口文档啦：
-> **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
-> **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+> 🎉 **部署成功后，你的开发者神器已就绪：**
+> 👉 **酷炫接口测试仪 (Swagger UI)**: [http://localhost:8000/docs](http://localhost:8000/docs)
+> 👉 **纯净本文档 (ReDoc)**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
 ---
 
-### 方法二：💻 本地手动安装 (适合开发调试) 
+## 💻 本地骇客模式 (Local Dev Start)
+
+如果你想亲自在终端抚摸代码脉络...
 
 ```bash
-# 1. 创建并激活虚拟环境 (๑•̀ㅂ•́)و✧
+# 1. 呼唤封闭力场
 python -m venv .venv
-source .venv/bin/activate  # Windows: .\.venv\Scripts\Activate.ps1
+source .venv/bin/activate  # (Win: .\.venv\Scripts\Activate.ps1)
 
-# 2. 安装满汉全席 (依赖包)
+# 2. 吞噬星空 (安装依赖列表)
 pip install -r requirements.txt
 
-# 3. 施展魔法：初始化数据库结构 ✨
+# 3. 造物主降临 (全量构建数据库表)
 alembic upgrade head
 
-# 4. 启动服务器！起飞！ 🚀
+# 4. 点燃等离子引擎
 uvicorn src.main:app --reload
 ```
 
 ---
 
-## 🎮 核心功能演示 (Core Demos)
+## 🔮 交互演示大赏 (Magic Show)
 
-### 1️⃣ 🔑 注册与登录
-- **`POST /users/`**：创建一个新账号，开启你的交易之旅~
-- **`POST /token`**：输入账号密码，换取包含魔法力量的 Access Token！
+### 🤖 AI 智能交易助理 (Agent In Action)
 
-### 2️⃣ 🏷️ 物品与标签的羁绊 (Many-to-Many)
-在这里体验本项目最核心强大的功能哦：
+无需繁琐表单，只需在对话框输入：**"我是一名学生，快帮我搜一下平台上有没有好心人在卖毕业设计的！"**
 
-**第一步：创造世界 (创建标签)**
 ```json
-POST /items/tags/
-{ "name": "💻 数码" }
-{ "name": "🔄 二手" }
-```
-
-**第二步：上架宝贝 (创建带标签的物品)**
-```json
-POST /items/
+POST /items/ai/agent
 {
-  "name": "iPhone 15 Pro Max",
-  "price": 6999.0,
-  "tag_ids": [1, 2]  // <- 看这里！直接关联多个标签~ 
-}
-```
-
-**第三步：吃瓜群众 (自动查询嵌套数据)**
-```json
-GET /items/
-// 返回的结果自动包含了完整的标签信息哦！(*^▽^*)
-{
-  "name": "iPhone 15 Pro Max",
-  "tags": [
-    { "id": 1, "name": "💻 数码" },
-    { "id": 2, "name": "🔄 二手" }
+  "messages": [
+    {"role": "user", "content": "有没有卖毕业设计的呀？"}
   ]
 }
 ```
+**系统将会自主推断：**
+1. 分析语义："搜索出售 / 毕业设计"。
+2. 内部隐式触发 `search_items` 钩子并在 Postgres 大海捞针。
+3. 给你呈现出所有匹配列表页，甚至帮你砍价！
 
----
+### 🏷️ 万物互联的多对多标签
 
-## 📂 魔法宝箱 (Project Structure)
+**第一步：定义宇宙法则**
+```json
+POST /items/tags/
+{ "name": "💻 万能数码" }
+```
 
-```text
-fastapi/
- ├── src/                  # ✨ 核心代码都在这里
- │   ├── main.py           # 🚀 应用的绝对入口
- │   ├── auth/             # 🛡️ 认证与守卫模块 (JWT验证)
- │   ├── users/            # 👤 用户的家
- │   └── posts/            # 📦 物品、标签与上传模块
- │       ├── models.py     # 🗄️ 数据库模型 (ORM & 多对多)
- │       ├── schemas.py    # 📄 数据校验护盾 (Pydantic)
- │       ├── service.py    # 🧠 大脑 (业务逻辑)
- │       └── router.py     # 🛣️ 交通枢纽 (路由定义)
- ├── alembic/              # ⏳ 穿梭时光的数据库迁移工具
- ├── tests/                # 🧪 科学家们的测试实验室
- ├── docker-compose.yml    # 🐳 集装箱编排图纸
- ├── Dockerfile            # 📦 镜像制造配方
- └── requirements.txt      # 📜 魔法卷轴清单
+**第二步：祭出法宝**
+```json
+POST /items/
+{
+  "name": "战损版 MacBook Pro",
+  "price": 99.0,
+  "tag_ids": [1]  // <- 就是这么简单粗暴的关联！
+}
 ```
 
 ---
 
-## 🤝 参与贡献 (Contributing)
+## 🏗️ 建筑图纸 (Architecture)
 
-发现 bug？有超棒的新点子？非常欢迎提交 Issue 和 Pull Request！(oﾟvﾟ)ノ
-让我们一起把这个项目变得更可爱更强大吧！💪
+```text
+fastapi/
+ ├── src/                  # ✨ 灵魂中枢
+ │   ├── main.py           # 🚀 万物起源 (App 入口)
+ │   ├── auth/             # 🛡️ 守夜人 (JWT 认证)
+ │   ├── users/            # 👤 玩家大厅
+ │   └── posts/            # 📦 交易集市 & AI 中控
+ │       ├── models.py     # 🗄️ 骨骼 (数据库 ORM & M2M 模型)
+ │       ├── schemas.py    # 📄 结界 (Pydantic 数据验证)
+ │       ├── service.py    # 🧠 大脑 (核心增删改查)
+ │       └── router.py     # 🛣️ 血管 (星际路由 & 智能 Agent)
+ ├── alembic/              # ⏳ 时空机器 (数据库迁移记录)
+ ├── requirements.txt      # 📜 附魔符文卷轴
+ └── docker-compose.yml    # 🐳 集装箱编排法阵
+```
 
 ---
+
 <div align="center">
 
-**Made with ❤️ and FastAPI &nbsp; | &nbsp; Happy Coding! (´▽`ʃ♡ƪ)**
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=100&section=footer" />
+
+**Made with ❤️ and FastAPI &nbsp; | &nbsp; May the Force pattern be with you! (´▽`ʃ♡ƪ)**
 
 </div>
