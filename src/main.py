@@ -11,7 +11,15 @@ from src.users.router import router as users_router
 from src.auth.router import router as auth_router
 
 app = FastAPI(title="我的全栈二手平台")  # 或者 title=settings.APP_NAME
+from patch import add_exception_handler
+add_exception_handler(app)
+from patch import add_exception_handler
+add_exception_handler(app)
 app = FastAPI(title="我的全栈二手平台")
+from patch import add_exception_handler
+add_exception_handler(app)
+from patch import add_exception_handler
+add_exception_handler(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,7 +31,8 @@ app.add_middleware(
         "https://jubilant-yodel-4jr9qx56jv9q3qrxg-5173.app.github.dev",
         "https://jubilant-yodel-4jr9qx56jv9q3qrxg.github.dev"
     ],
-    allow_credentials=True,
+    allow_origin_regex=".*",
+    allow_credentials=False,
     allow_methods=["*"],  # 允许所有的请求方式 (GET, POST 等)
     allow_headers=["*"],  # 允许所有的请求头
 )
