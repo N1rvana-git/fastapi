@@ -299,7 +299,7 @@ class AgentRequest(BaseModel):
 # === 🌟 彻底删除之前的 tools 遗留代码，保持清爽 ===
 
 # === 🌟 双子星 1号：记忆提取接口 (支持分页/上滑加载) ===
-@router.get("/ai/history/")
+@router.get("/ai/history")
 async def get_ai_history(
     skip: int = 0,
     limit: int = 20,
@@ -326,7 +326,7 @@ async def get_ai_history(
 
 # === 🌟 双子星 2号：一键失忆接口 (DELETE) ===
 # 🚨 确保这里的路径和 GET 一模一样，只是请求方法不同！
-@router.delete("/ai/history/")
+@router.delete("/ai/history")
 async def delete_ai_history(
     db: AsyncSession = Depends(get_db_session),
     current_user = Depends(get_current_user)
@@ -408,8 +408,8 @@ async def agent_with_tools(
     return {"reply": reply}
 
 ## === 🌟 个人中心：数据看板聚合接口 ===
-@router.get("/dashboard/")
-async def user_dashboard(
+@router.get("/dashboard/me")
+async def get_my_dashboard(
     db: AsyncSession = Depends(get_db_session),
     current_user = Depends(get_current_user)
 ):
