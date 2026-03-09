@@ -24,14 +24,7 @@ add_exception_handler(app)
 app.add_middleware(
     CORSMiddleware,
     # 允许访问的前端地址，注意：千万不要在网址最后加斜杠 "/"
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://jubilant-yodel-4jr9qx56jv9q3qrxg.app.github.dev",
-        "https://jubilant-yodel-4jr9qx56jv9q3qrxg-5173.app.github.dev",
-        "https://jubilant-yodel-4jr9qx56jv9q3qrxg.github.dev"
-    ],
-    allow_origin_regex=".*",
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],  # 允许所有的请求方式 (GET, POST 等)
     allow_headers=["*"],  # 允许所有的请求头
