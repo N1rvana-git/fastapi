@@ -406,3 +406,46 @@ async def agent_with_tools(
     await db.commit() # 再次存入硬盘！
     
     return {"reply": reply}
+
+## === 🌟 个人中心：数据看板聚合接口 ===
+@router.get("/dashboard/")
+async def user_dashboard(
+    db: AsyncSession = Depends(get_db_session),
+    current_user = Depends(get_current_user)
+):
+    #"""获取当前用户的所有核心数据（发布的商品、历史订单等）"""
+    
+    # 1. 查我发布的商品 (按最新发布排序)
+    my_items_query = (
+        select(models.ItemModel)
+        .where(models.ItemModel.owner_id == current_user.id)
+        .order_by(desc(models.ItemModel.id))
+    )
+    my_items = (await db.execute(my_items_query)).scalars().all()
+    # 2. 查我买到的订单 (连表查出具体买了啥商品)
+    # 🌟 核心魔法：selectinload 提前把订单对应的商品信息打包查出来，防止异步报错！
+    my_orders_query = (
+        select(models.OrderModel)
+        .options(selectinload(models.OrderModel.item))  # 预加载订单对应的商品信息
+        .where(models.OrderModel.buyer_id == current_user.id)
+        .order_by(desc(models.OrderModel.id))
+    )
+    my_orders = (await db.execute(my_orders_query)).scalars().all()
+    # 3. 组装看板数据，一次性发给前端！
+    return {
+        "user_email": current_user.email,
+        "stats": {
+            "published_count": len(my_items),
+            "orders_count": len(my_orders)
+        },
+        "my_items": [{"id": i.id, "name": i.name, "price": i.price, "is_sold": i.is_sold} for i in my_items],
+        "my_orders": [
+            {
+                "order_id": o.id, 
+                "item_name": o.item.name if o.item else "商品已下架", 
+                "price": o.item.price if o.item else 0,
+                "status": o.status, 
+                "time": o.created_at.isoformat()
+            } for o in my_orders
+        ]
+    }
