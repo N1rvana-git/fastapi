@@ -25,7 +25,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 from zhipuai import ZhipuAI
 from fastapi.responses import StreamingResponse
-from src.worker import inject_embedding_task
+from src.worker import inject_embedding_task,send_feishu_alert_task
 router = APIRouter(
     prefix="/items",
     tags=["items"]
@@ -243,6 +243,60 @@ async def read_tags(db: AsyncSession = Depends(get_db_session)):
     
     return tags_list
 
+
+@router.post("/tags/", status_code=status.HTTP_201_CREATED)
+async def add_tag(
+    tag_in: schemas.TagCreate, 
+    db: AsyncSession = Depends(get_db_session), 
+    current_user: models.UserModel = Depends(get_current_user)
+):
+    """
+    添加新标签
+    """
+    tag_name = tag_in.name.strip()
+    if not tag_name:
+        raise HTTPException(status_code=400, detail="标签名不能为空")
+
+    result = await db.execute(select(models.item_TagModel).filter(models.item_TagModel.name == tag_name))
+    existing_tag = result.scalars().first()
+    if existing_tag:
+        raise HTTPException(status_code=400, detail="该标签已存在，请换一个名字")
+
+    new_tag = models.item_TagModel(name=tag_name)
+    db.add(new_tag)
+    await db.commit()
+    await db.refresh(new_tag)
+    
+    # 清除 Redis 缓存
+    if redis_client:
+        await redis_client.delete("all_tags")
+        
+    return new_tag
+
+
+@router.delete("/tags/{tag_id}")
+async def delete_tag(
+    tag_id: int, 
+    db: AsyncSession = Depends(get_db_session), 
+    current_user: models.UserModel = Depends(get_current_user)
+):
+    """
+    删除标签
+    """
+    result = await db.execute(select(models.item_TagModel).filter(models.item_TagModel.id == tag_id))
+    tag = result.scalars().first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="标签不存在或已被删除")
+
+    await db.delete(tag)
+    await db.commit()
+    
+    # 清除 Redis 缓存
+    if redis_client:
+        await redis_client.delete("all_tags")
+        
+    return {"message": "标签删除成功"}
+
 #多对多收藏/取消收藏接口
 @router.post("/{item_id}/favorite")
 async def toggle_favorite(
@@ -322,6 +376,7 @@ async def buy_item(
         
         # 提交事务：订单生成和商品状态更新同时生效，然后释放那把“悲观锁”
         await db.commit()
+        send_feishu_alert_task.delay(item.name, item.price, current_user.email)
         await manager.broadcast(f"📢 【全服通告】神仙手速！极品闲置【{item.name}】刚刚被抢购一空！")
         return {
             "message": "🎉 恭喜你，抢购成功！", 
@@ -408,65 +463,112 @@ async def agent_with_tools(
     db.add(new_user_record)
     await db.commit() # 存入硬盘！
 
-    # === 🌟 架构师外挂升级：大厂级 Vector RAG (向量检索) ===
+    # === 🌟 保留你的骄傲：大厂级 Vector RAG (向量检索) ===
     trigger_words = ["什么", "卖", "买", "多少钱", "价格", "有", "卡", "电脑", "手机", "二手", "查", "推荐", "想要"]
     need_db_search = any(word in last_user_msg for word in trigger_words)
-    
-    messages = [
-        {"role": "system", "content": "你是闲小宝，一个二手交易平台的AI管家。说话幽默风趣。如果系统给你提供了数据，请直接根据数据回答，不要客套。"}
-    ]
+    db_data_str = "当前未触发搜索，库存未知。"
     
     if need_db_search:
         print(f"🔫 [向量检索] 触发搜索，正在将用户的提问 '{last_user_msg}' 转化为高维向量...")
         try:
-            # 1. 把用户的提问也变成 1024 维的向量
-            embed_response = ai_client.embeddings.create(
-                model="embedding-2",
-                input=last_user_msg
-            )
+            embed_response = ai_client.embeddings.create(model="embedding-2", input=last_user_msg)
             query_vector = embed_response.data[0].embedding
 
-            # 2. 🌟 价值百万的 SQL：在 1024 维空间中计算“余弦距离”，找出最相似的 3 件商品！
-            print("🌌 [向量检索] 正在高维空间中执行余弦相似度匹配...")
             query = (
                 select(models.ItemModel)
-                .where(models.ItemModel.is_offer == True)  # 只找在售的商品
-                .where(models.ItemModel.is_sold == False)  # 卖掉的不要
-                .where(models.ItemModel.embedding.is_not(None)) # 过滤掉以前没有“灵魂”的旧商品
-                .order_by(models.ItemModel.embedding.cosine_distance(query_vector)) # 🌟 余弦距离越小越相似！
-                .limit(3) # 🌟 核心：就算有一万件商品，我也只取最相关的 3 件，绝不撑爆 AI 大脑！
+                .where(models.ItemModel.is_offer == True)
+                .where(models.ItemModel.is_sold == False)
+                .where(models.ItemModel.embedding.is_not(None))
+                .order_by(models.ItemModel.embedding.cosine_distance(query_vector))
+                .limit(3)
             )
             result = await db.execute(query)
             items = result.scalars().all()
-
-            db_data_str = "当前没有任何商品。" if not items else "、".join([f"{item.name}(￥{item.price})" for item in items])
-            messages.append({
-                "role": "system", 
-                "content": f"【后台自动向量检索结果】：为你找到平台上最匹配的商品：{db_data_str}。请直接用这段数据回答用户！"
-            })
+            db_data_str = "没有找到匹配的商品。" if not items else "、".join([f"{item.name}(￥{item.price})" for item in items])
             print(f"🎯 [向量检索] 匹配成功！选出的 Top-3 商品是：{db_data_str}")
-            
         except Exception as e:
-            print(f"⚠️ [向量检索] 匹配失败，退化为普通聊天模式: {e}")
-    # ==================================
-    # ==================================
+            print(f"⚠️ [向量检索] 匹配失败: {e}")
+
+    # === 🌟 架构师换脑手术：将 RAG 结果融入【销售状态机】 ===
+    # === 🌟 架构师换脑手术：强制抹除 AI 的定价潜意识 ===
+    messages = [
+        {
+            "role": "system", 
+            "content": f"""你是一个极其专业的闲小宝二手平台金牌销售。说话幽默风趣。
+你必须严格遵循以下【状态机工作流】：
+1. 【探需阶段】：热情打招呼，询问用户想买什么。
+2. 【导购阶段】：根据以下【后台向量检索实时库存】为用户推荐：
+   [实时库存数据：{db_data_str}]
+3. 【逼单阶段】：如果用户说“我想买”、“下单”等意向，**你必须立刻询问用户的【详细收货地址】！** 绝对不能跳过！
+4. 【结单阶段】：用户提供地址后，立刻调用 `create_order` 函数！
+🚨 【最高红线指令】：你在任何时候、任何情况下，都绝对、千万不要向用户询问或确认商品的价格！价格由我们后台的超级计算机自动核算！你只管索要地址并调用函数！"""
+        }
+    ]
 
     # 拼装用户的聊天记录
     for msg in history_list:
         messages.append({"role": msg.role, "content": msg.content})
-
     if len(history_list) == 0:
         messages.append({"role": "user", "content": "你好"})
 
-    print("🤖 [Agent 核心] 正在向云端大脑发送最终请求...")
+    # === 🌟 赋予 AI 扣款与发货的真实权力 (Function Calling) ===
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "create_order",
+                "description": "当且仅当用户确定购买某件商品，并且提供了详细收货地址时，调用此函数生成订单并触发发货告警",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "item_name": {"type": "string", "description": "要购买的商品名称"},
+                        "address": {"type": "string", "description": "用户的详细收货地址"}
+                    },
+                    "required": ["item_name", "price", "address"]
+                }
+            }
+        }
+    ]
+
+    print("🤖 [Agent 核心] 正在向带有 Tools 的云端大脑发送最终请求...")
     response = ai_client.chat.completions.create(
         model="glm-4.5-flash", 
         messages=messages,
+        tools=tools, # 🌟 把工具盒递给 AI
         max_tokens=4096,
         temperature=0.4 
     )
     
-    reply = response.choices[0].message.content
+    ai_message = response.choices[0].message
+    reply = ai_message.content or "抱歉老板，我刚才脑子短路了一下，能麻烦您重新说一次吗？"
+    # === 🌟 拦截并解析 AI 的行为 ===
+    if ai_message.tool_calls:
+        print("⚡ [Function Calling] AI 决定执行工具调用！正在触发下单流程！")
+        tool_call = ai_message.tool_calls[0]
+        if tool_call.function.name == "create_order":
+            args = json.loads(tool_call.function.arguments)
+            
+            item_name = args.get("item_name", "未知商品")
+            address = args.get("address", "未知地址")
+            
+            # === 🌟 架构师安全防线：后台自己去数据库查真实价格！ ===
+            print(f"🛡️ [安全校验] 正在数据库核实【{item_name}】的真实价格...")
+            price_query = select(models.ItemModel).where(models.ItemModel.name.ilike(f"%{item_name}%")).where(models.ItemModel.is_offer == True)
+            price_result = await db.execute(price_query)
+            real_item = price_result.scalars().first()
+            
+            # 如果没查到，就给个 0，或者直接报错打断
+            real_price = real_item.price if real_item else 0.0
+            # ========================================================
+            
+            # 🔥 触发真实的飞书告警！传入绝对安全的 real_price！
+            send_feishu_alert_task.delay(item_name, real_price, current_user.email, address)
+            
+            reply = f"🎉 搞定啦老板！您的【{item_name}】已经为您下单，我们马上安排发往：**{address}**！随时为您跟进物流状态哦！"
+    else:
+        # 如果没有触发发货，那就是正常聊天
+        reply = ai_message.content
+
     print(f"✅ [Agent 核心] 最终回复: {reply}")
     
     # ===================================================

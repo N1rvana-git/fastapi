@@ -57,3 +57,4 @@ openai
 zhipuai
 pgvector
 celery
+requests

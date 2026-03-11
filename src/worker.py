@@ -1,5 +1,6 @@
 import time
 import asyncio
+import requests
 from celery import Celery
 from zhipuai import ZhipuAI
 from sqlalchemy import select
@@ -47,3 +48,60 @@ def inject_embedding_task(item_id: int, item_name: str):
     except Exception as e:
         print(f"⚠️ [黑灯工厂] 锻造失败: {e}")
         return f"Failed: {e}"
+    
+@celery_app.task
+def send_feishu_alert_task(item_name: str, price: float, buyer_email: str, address: str):
+    """
+    触发企业级飞书卡片告警
+    """
+    print(f"🔔 [黑灯工厂] 检测到新订单！正在向飞书总部发送加密卡片...")
+    
+    # 🚨 把这里换成你刚刚在飞书群里复制的 Webhook URL ！！！
+    webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/c9032b83-2f3b-4a22-ac68-4623a48b16fe"
+    
+    # 🌟 核心魔法：极其骚气的飞书交互式卡片 JSON 结构
+    payload = {
+        "msg_type": "interactive",
+        "card": {
+            "header": {
+                "title": {
+                    "tag": "plain_text",
+                    "content": "🚨 【闲小宝】新订单成交警报！"
+                },
+                "template": "red"  # 红色大标题，极其醒目！
+            },
+            "elements": [
+                {
+                    "tag": "div",
+                    "text": {
+                        "tag": "lark_md",
+                        "content": f"**🛍️ 售出商品**：{item_name}\n**💰 订单金额**：¥{price}\n**👤 买家账号**：{buyer_email}\n**📍 配送地址**：{address}\n**⏰ 交易时间**：刚刚"
+                    }
+                },
+                {"tag": "hr"},
+                {
+                    "tag": "action",
+                    "actions": [
+                        {
+                            "tag": "button",
+                            "text": {"tag": "plain_text", "content": "📦 立刻发货"},
+                            "type": "primary"
+                        },
+                        {
+                            "tag": "button",
+                            "text": {"tag": "plain_text", "content": "💬 联系买家"},
+                            "type": "default"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    
+    try:
+        response = requests.post(webhook_url, json=payload)
+        print(f"✅ [黑灯工厂] 飞书告警发送成功！状态码: {response.status_code}")
+        return "Webhook Alert Sent!"
+    except Exception as e:
+        print(f"⚠️ [黑灯工厂] 飞书告警发送失败: {e}")
+        return "Webhook Alert Failed!"

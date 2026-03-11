@@ -5,7 +5,7 @@ class TagBase(BaseModel):
     name: str
 
 class TagCreate(TagBase):
-    pass
+    name: str
 
 class Tag(TagBase):
     id: int
