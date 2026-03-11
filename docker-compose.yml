@@ -19,7 +19,8 @@ services:
 
   # 2. PostgreSQL 数据库服务
   db:
-    image: postgres:15-alpine # 直接拉取官方轻量级镜像
+    image: pgvector/pgvector:pg15 # 直接拉取官方轻量级镜像
+    restart: always
     container_name: postgres_db
     environment:
       - POSTGRES_USER=myuser

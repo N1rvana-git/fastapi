@@ -3,7 +3,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 import os
-
 from src.posts.router import router as posts_router
 from src.config import settings
 from health.router import router as health_router

@@ -4,7 +4,7 @@ from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Tabl
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from src.database import Base
-
+from pgvector.sqlalchemy import Vector
 class ItemModel(Base):
     __tablename__ = "item"#表名
     id = Column(Integer, primary_key=True,index=True)
@@ -24,6 +24,8 @@ class ItemModel(Base):
     tags = relationship("item_TagModel", secondary="item_tag", back_populates="items", lazy="selectin")
 
     is_sold = Column(Boolean, default=False)  # 新增：是否已售出
+
+    embedding = Column(Vector(1024))  # 新增：商品描述的向量表示
 
 class UserModel(Base):
     __tablename__ = "users"#把 Python 类映射成 PostgreSQL 表

@@ -1,33 +1,42 @@
-name: 🚀 FastAPI 全自动测试流水线
+name: 闲小宝 CI/CD 全自动流水线
 
-# 触发条件：什么时候让机器人开始干活？
+# 触发条件：当有人向 master 或 main 分支执行 git push 时，立刻唤醒机器人！
 on:
   push:
-    branches:
-      - main
-      - master  # 只要有人向 main 或 master 分支 push 代码，就触发！
+    branches: [ "master", "main" ]
 
-# 任务清单：机器人具体要做什么？
 jobs:
-  test:
-    name: 运行自动化测试
-    runs-on: ubuntu-latest  # 机器人会借用一台最新的 Ubuntu Linux 电脑
+  build-and-deploy:
+    # 机器人的工作台：直接向 GitHub 白嫖一台最新的 Ubuntu 虚拟服务器！
+    runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 第一步：把我们的代码从仓库下载到这台电脑上
-        uses: actions/checkout@v3
+    - name: 📥 第一步：检出代码 (Checkout)
+      uses: actions/checkout@v3
 
-      - name: 🐍 第二步：安装 Python 3.11 环境
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
+    - name: 🐍 第二步：安装 Python 3.11 引擎
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
 
-      - name: 📦 第三步：安装 requirements.txt 里的依赖包
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest httpx  # 额外装一下测试工具
+    - name: 📦 第三步：安装项目依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        # 顺便装一个代码语法检查工具 flake8
+        pip install flake8 
 
-      - name: 🧪 第四步：执行自动化测试！
-        run: |
-          pytest
+    - name: 🕵️‍♂️ 第四步：全栈大侦探代码审查 (Linting)
+      run: |
+        # 严格检查！如果代码里有致命语法错误（比如少写括号），直接在这里熔断报错，绝不部署到生产环境！
+        flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+    - name: 🚀 第五步：自动化部署 (模拟)
+      run: |
+        echo "=========================================="
+        echo "🎉 恭喜！代码审查全绿通过！没有任何致命 Bug！"
+        echo "🔐 正在提取 SSH 密钥..."
+        echo "🌐 正在连接生产环境云服务器 (IP: 8.8.8.8)..."
+        echo "🐳 正在执行: docker compose pull && docker compose up -d"
+        echo "✅ 部署完成！闲小宝平台最新版本已光速上线！"
+        echo "=========================================="

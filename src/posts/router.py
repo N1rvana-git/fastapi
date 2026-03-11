@@ -2,7 +2,7 @@
 import os
 import asyncio
 import shutil
-from fastapi import APIRouter, Depends, Query, HTTPException,File, UploadFile, Form,BackgroundTasks,status
+from fastapi import APIRouter, Depends, Query, HTTPException,File, UploadFile, Form,BackgroundTasks,status,WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
@@ -25,13 +25,49 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 from zhipuai import ZhipuAI
 from fastapi.responses import StreamingResponse
+from src.worker import inject_embedding_task
 router = APIRouter(
     prefix="/items",
     tags=["items"]
 )
 
 redis_client = aioredis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+# === 🌟 架构师引擎：WebSocket 全局连接池 ===
+class ConnectionManager:
+    def __init__(self):
+        # 存放所有当前在线用户的长连接
+        self.active_connections: list[WebSocket] = []
 
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        # 遍历所有在线用户，群发消息！
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                pass # 如果有人掉线了就跳过
+
+manager = ConnectionManager()
+
+# === 🌟 交易大厅 WebSocket 接入点 ===
+@router.websocket("/ws/hall")
+async def websocket_endpoint(websocket: WebSocket):
+    # 用户一打开网页，就接通并注册到连接池
+    await manager.connect(websocket)
+    try:
+        while True:
+            # 保持线路畅通，等待前端发来的心跳包
+            await websocket.receive_text() 
+    except WebSocketDisconnect:
+        # 用户关闭网页，自动将其移出连接池
+        manager.disconnect(websocket)
 #定义一个极其耗时的后台任务
 async def ai_image_review(filename: str):
     print(f"⏳ [AI 审核开始] 正在审核图片：{filename}...")
@@ -45,13 +81,17 @@ async def create_new_item(
     db: AsyncSession = Depends(get_db_session),
     current_user: models.UserModel = Depends(get_current_user)
 ):
-    """创建接口：使用 JSON `ItemCreate` 模型（图片需先上传获取路径）"""
-    # 调用 service，传入 current_user.id 作为 owner_id
+    """创建接口：极速响应，重活甩给 Celery"""
+    # 1. 瞬间存入数据库基础信息
     db_item = await service.create_item(db=db, item=item, owner_id=current_user.id)
 
-    # 把 AI 审核任务交给后台去做，主线程不等它，直接返回响应
-    if item.image_path:
-        background_tasks.add_task(ai_image_review, filename=item.image_path)
+    # === 🌟 架构师魔法：瞬间将任务甩给后台 Redis 队列！ ===
+    print(f"📦 [主线程] 商品基本信息保存成功，已将向量注入任务丢给 Celery！")
+    
+    # 使用 .delay() 异步投递！主线程绝不停留！
+    inject_embedding_task.delay(db_item.id, db_item.name)
+    # ===================================================
+
     return db_item
 
 # 一个用来处理图片的普通函数
@@ -89,28 +129,38 @@ async def read_items_from_db(
 ):
     print(f"🔍 [查询参数] skip={skip}, limit={limit}, search='{search}', is_offer_filter={is_offer_filter}")
 
-    #1.构造一个查询图纸
-    query = select(models.ItemModel)
-    # 🌟 新增：永远只查出没有被卖掉的商品！
-    query = query.where(models.ItemModel.is_sold == False)
+    # 1.构造一个查询图纸 (顺便过滤掉已售出的商品)
+    query = select(models.ItemModel).where(models.ItemModel.is_sold == False)
     if is_offer_filter is not None:
         query = query.where(models.ItemModel.is_offer == is_offer_filter)
     if search:
         query = query.where(models.ItemModel.name.ilike(f"%{search}%"))
 
-    """查询物品列表"""
-    # 动态构建查询
-    count_query = select(func.count()).select_from(query.subquery())  # 先构造一个子查询来计算总数
+    # 计算总数
+    count_query = select(func.count()).select_from(query.subquery())
     total = await db.scalar(count_query)
     
-    #3.切割数据
+    # 获取分页数据
     query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     items = result.scalars().all()
     
+    # === 🌟 架构师级修复：精准切除不需要发给前端的庞大向量数据 ===
+    safe_items = []
+    for item in items:
+        safe_items.append({
+            "id": item.id,
+            "name": item.name,
+            "price": item.price,
+            "is_offer": item.is_offer,
+            "is_sold": item.is_sold,
+            "image_path": item.image_path
+            # 🚨 绝对不把 item.embedding 塞进来，防止序列化爆炸！
+        })
+
     return {
         "total": total,
-        "items": items
+        "items": safe_items
     }
 
 @router.delete("/{item_id}", status_code=204)
@@ -272,7 +322,7 @@ async def buy_item(
         
         # 提交事务：订单生成和商品状态更新同时生效，然后释放那把“悲观锁”
         await db.commit()
-        
+        await manager.broadcast(f"📢 【全服通告】神仙手速！极品闲置【{item.name}】刚刚被抢购一空！")
         return {
             "message": "🎉 恭喜你，抢购成功！", 
             "order_id": new_order.id,
@@ -358,8 +408,8 @@ async def agent_with_tools(
     db.add(new_user_record)
     await db.commit() # 存入硬盘！
 
-    # === 🌟 架构师外挂：穷人版意图拦截器 (RAG 架构) ===
-    trigger_words = ["什么", "卖", "买", "多少钱", "价格", "有", "卡", "电脑", "手机", "二手", "查"]
+    # === 🌟 架构师外挂升级：大厂级 Vector RAG (向量检索) ===
+    trigger_words = ["什么", "卖", "买", "多少钱", "价格", "有", "卡", "电脑", "手机", "二手", "查", "推荐", "想要"]
     need_db_search = any(word in last_user_msg for word in trigger_words)
     
     messages = [
@@ -367,15 +417,38 @@ async def agent_with_tools(
     ]
     
     if need_db_search:
-        print("🔫 [物理外挂] 命中关键词！直接用 Python 查数据库！")
-        query = select(models.ItemModel).where(models.ItemModel.is_offer == True)
-        result = await db.execute(query)
-        items = result.scalars().all()
-        db_data_str = "当前没有任何商品。" if not items else "、".join([f"{item.name}(￥{item.price})" for item in items])
-        messages.append({
-            "role": "system", 
-            "content": f"【后台自动查询结果】：目前平台有以下商品：{db_data_str}。请直接用这段数据回答用户刚才的问题！"
-        })
+        print(f"🔫 [向量检索] 触发搜索，正在将用户的提问 '{last_user_msg}' 转化为高维向量...")
+        try:
+            # 1. 把用户的提问也变成 1024 维的向量
+            embed_response = ai_client.embeddings.create(
+                model="embedding-2",
+                input=last_user_msg
+            )
+            query_vector = embed_response.data[0].embedding
+
+            # 2. 🌟 价值百万的 SQL：在 1024 维空间中计算“余弦距离”，找出最相似的 3 件商品！
+            print("🌌 [向量检索] 正在高维空间中执行余弦相似度匹配...")
+            query = (
+                select(models.ItemModel)
+                .where(models.ItemModel.is_offer == True)  # 只找在售的商品
+                .where(models.ItemModel.is_sold == False)  # 卖掉的不要
+                .where(models.ItemModel.embedding.is_not(None)) # 过滤掉以前没有“灵魂”的旧商品
+                .order_by(models.ItemModel.embedding.cosine_distance(query_vector)) # 🌟 余弦距离越小越相似！
+                .limit(3) # 🌟 核心：就算有一万件商品，我也只取最相关的 3 件，绝不撑爆 AI 大脑！
+            )
+            result = await db.execute(query)
+            items = result.scalars().all()
+
+            db_data_str = "当前没有任何商品。" if not items else "、".join([f"{item.name}(￥{item.price})" for item in items])
+            messages.append({
+                "role": "system", 
+                "content": f"【后台自动向量检索结果】：为你找到平台上最匹配的商品：{db_data_str}。请直接用这段数据回答用户！"
+            })
+            print(f"🎯 [向量检索] 匹配成功！选出的 Top-3 商品是：{db_data_str}")
+            
+        except Exception as e:
+            print(f"⚠️ [向量检索] 匹配失败，退化为普通聊天模式: {e}")
+    # ==================================
     # ==================================
 
     # 拼装用户的聊天记录
