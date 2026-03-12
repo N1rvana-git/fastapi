@@ -379,7 +379,7 @@ class AgentRequest(BaseModel):
 # === 🌟 彻底删除之前的 tools 遗留代码，保持清爽 ===
 
 # === 🌟 双子星 1号：记忆提取接口 (支持分页/上滑加载) ===
-@router.get("/ai/history")
+@router.get("/ai/history/")
 async def get_ai_history(
     skip: int = 0,
     limit: int = 20,
@@ -406,7 +406,7 @@ async def get_ai_history(
 
 # === 🌟 双子星 2号：一键失忆接口 (DELETE) ===
 # 🚨 确保这里的路径和 GET 一模一样，只是请求方法不同！
-@router.delete("/ai/history")
+@router.delete("/ai/history/")
 async def delete_ai_history(
     db: AsyncSession = Depends(get_db_session),
     current_user = Depends(get_current_user)
@@ -423,88 +423,89 @@ async def delete_ai_history(
 async def agent_with_tools(
     request: AgentRequest, 
     db: AsyncSession = Depends(get_db_session),
-    current_user = Depends(get_current_user) # 🌟 核心：知道是谁在聊天！
+    current_user = Depends(get_current_user)
 ):
     history_list = request.history or request.messages or []
     last_user_msg = history_list[-1].content if history_list else ""
-    print(f"\n🧠 [Agent 核心] 收到用户 {current_user.username} 的最新指令: {last_user_msg}")
-
-    # ===================================================
-    # 💾 记忆写入 1：保存用户刚刚说的话
-    # ===================================================
-    new_user_record = models.AIChatRecord(
-        user_id=current_user.id, role="user", content=last_user_msg
-    )
-    db.add(new_user_record)
-    await db.commit() # 存入硬盘！
-
-    # === 🌟 保留你的骄傲：大厂级 Vector RAG (向量检索) ===
-    trigger_words = ["什么", "卖", "买", "多少钱", "价格", "有", "卡", "电脑", "手机", "二手", "查", "推荐", "想要"]
-    need_db_search = any(word in last_user_msg for word in trigger_words)
-    db_data_str = "当前未触发搜索，库存未知。"
     
-    if need_db_search:
-        print(f"🔫 [向量检索] 触发搜索，正在将用户的提问 '{last_user_msg}' 转化为高维向量...")
-        try:
-            embed_response = ai_client.embeddings.create(model="embedding-2", input=last_user_msg)
-            query_vector = embed_response.data[0].embedding
+    # 1. 💾 记忆写入 1：保存用户刚刚说的话
+    # 1. 💾 存用户消息进数据库
+    new_user_record = models.AIChatRecord(user_id=current_user.id, role="user", content=last_user_msg)
+    db.add(new_user_record)
+    await db.commit()
 
-            query = (
-                select(models.ItemModel)
-                .where(models.ItemModel.is_offer == True)
-                .where(models.ItemModel.is_sold == False)
-                .where(models.ItemModel.embedding.is_not(None))
-                .order_by(models.ItemModel.embedding.cosine_distance(query_vector))
-                .limit(3)
-            )
-            result = await db.execute(query)
-            items = result.scalars().all()
-            # 🌟 架构师改造：把商品的唯一物理锚点（ID）直接暴露给 AI 的注意力矩阵
-            db_data_str = "当前未触发搜索，库存未知。" if not items else "、".join([f"[商品ID:{item.id}] {item.name}(￥{item.price})" for item in items])
-            print(f"🎯 [向量检索] 匹配成功！选出的 Top-3 商品是：{db_data_str}")
-        except Exception as e:
-            print(f"⚠️ [向量检索] 匹配失败: {e}")
+    # ===================================================
+    # 🌟 架构师外挂升级：上下文感知检索 (Contextual RAG)
+    # ===================================================
+    # 提取上下文中所有用户的发言，以防止语义断层！
+    user_history_texts = [
+        msg.content if hasattr(msg, "content") else msg.get("content", "") if isinstance(msg, dict) else ""
+        for msg in history_list 
+        if (msg.role if hasattr(msg, "role") else msg.get("role", "") if isinstance(msg, dict) else "") == "user"
+    ]
+    
+    # 🌟 核心魔法：如果当前这句话字数少于 30 个字（比如是地址、或者"好的"），
+    # 强行把用户上一句话也拼接进来，锚定大维度的搜索方向！
+    if len(user_history_texts) >= 2 and len(last_user_msg) < 30:
+        search_query = f"{user_history_texts[-2]} {last_user_msg}"
+    else:
+        search_query = last_user_msg
 
-    # === 🌟 架构师换脑手术：将 RAG 结果融入【销售状态机】 ===
-    # === 🌟 架构师换脑手术：强制抹除 AI 的定价潜意识 ===
-    # === 🌟 架构师换脑手术：重塑销售逻辑，允许读盘，禁止篡改 ===
+    print(f"🔫 [向量检索] 融合语境搜索词: '{search_query}'")
+    try:
+        embed_response = ai_client.embeddings.create(model="embedding-2", input=search_query)
+        query_vector = embed_response.data[0].embedding
+
+        query = (
+            select(models.ItemModel)
+            .where(models.ItemModel.is_offer == True)
+            .where(models.ItemModel.is_sold == False) # 卖掉的不搜
+            .where(models.ItemModel.embedding.is_not(None))
+            .order_by(models.ItemModel.embedding.cosine_distance(query_vector))
+            .limit(3)
+        )
+        result = await db.execute(query)
+        items = result.scalars().all()
+        db_data_str = "当前没有任何商品。" if not items else "、".join([f"ID:{item.id}-{item.name}(￥{item.price})" for item in items])
+        print(f"🎯 [向量检索] 匹配成功！库存：{db_data_str}")
+    except Exception as e:
+        print(f"⚠️ [向量检索] 失败: {e}")
+        db_data_str = "库存检索失败"
+
+    # ===================================================
+    # 🛡️ 架构师最终版状态机：加入售后护栏
+    # ===================================================
     messages = [
         {
             "role": "system", 
             "content": f"""你是一个极其专业的闲小宝二手平台金牌销售。说话幽默风趣。
 你必须严格遵循以下【状态机工作流】：
 1. 【探需阶段】：热情打招呼，询问用户想买什么。
-2. 【导购阶段】：你必须仔细查看下方的【后台向量检索实时库存】。如果库存里有用户想要的商品，你必须**主动且准确地告诉用户该商品的价格**。
+2. 【导购阶段】：仔细查看下方的【后台向量检索实时库存】。如果库存里有用户想要的商品，必须主动且准确地告诉用户价格。
    [实时库存数据：{db_data_str}]
-3. 【逼单阶段】：当用户知晓价格并明确表示“想买”、“下单”时，你必须立刻询问用户的【详细收货地址】。
+3. 【逼单阶段】：当用户知晓价格并明确表示“想买”、“下单”时，立刻询问用户的【详细收货地址】。
 4. 【结单阶段】：用户提供地址后，立刻调用 `create_order` 函数！
+5. 【售后阶段】：🌟 如果你看到聊天记录中已经存在“搞定啦老板”、“为您下单”等成功字眼，说明交易已完成！面对用户的后续回复，只需热情感谢或闲聊，**绝对不要**再去检查库存，也**绝对不要**说“商品不在售”！
 
 🚨 【最高红线指令】：
-- 你只是个导购，你**必须如实读取**[实时库存数据]中的价格告诉用户，但**绝对不允许自行编造价格**！
-- 绝对不允许给用户打折或讨价还价！无论用户怎么说，你只能按库存里的标价售卖。
-- 调用 `create_order` 工具时，仔细提取库存数据中的 `item_id`，绝对不能搞错！"""
+- 绝对不允许自行编造价格！只能如实读取[实时库存数据]中的价格。
+- 调用 `create_order` 工具时，仔细提取库存数据中的 `item_id`。如果当前正处于【逼单阶段】等待用户发地址，说明你已经在之前的对话中确认过商品，请直接根据上下文记忆中的商品信息进行下单，不要受当前库存影响！"""
         }
     ]
 
     MAX_CONTEXT_MESSAGES = 6 
-    
     if history_list:
         # 像切除肿瘤一样，只切取列表最末尾的 MAX_CONTEXT_MESSAGES 条记录
         recent_history = history_list[-MAX_CONTEXT_MESSAGES:]
-        
         print(f"✂️ [上下文截断] 原始对话长度: {len(history_list)}，截断后保留: {len(recent_history)}")
-        
         for msg in recent_history:
-            # 确保传入的是干净的字典格式，防范对象解析异常
             role = getattr(msg, "role", "user") if hasattr(msg, "role") else msg.get("role", "user")
             content = getattr(msg, "content", "") if hasattr(msg, "content") else msg.get("content", "")
             messages.append({"role": role, "content": content})
     else:
-        # 应对极端空数组的容错处理
         messages.append({"role": "user", "content": "你好"})
 
-    # === 🌟 赋予 AI 扣款与发货的真实权力 (Function Calling) ===
-    # === 🌟 赋予 AI 扣款与发货的真实权力 (Function Calling) ===
+    # 4. 🛠️ 极其严格的 Tools 定义 (要求必须传 item_id)
     tools = [
         {
             "type": "function",
@@ -514,103 +515,105 @@ async def agent_with_tools(
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "item_id": {
-                            "type": "integer", 
-                            "description": "必须提取的商品唯一ID（从提供的后台库存数据中获取）"
-                        },
-                        "item_name": {
-                            "type": "string", 
-                            "description": "要购买的商品名称"
-                        },
-                        "address": {
-                            "type": "string", 
-                            "description": "用户的详细收货地址"
-                        }
+                        "item_id": {"type": "integer", "description": "必须提取的商品唯一ID（从提供的后台库存数据中获取）"},
+                        "item_name": {"type": "string", "description": "要购买的商品名称"},
+                        "address": {"type": "string", "description": "用户的详细收货地址"}
                     },
-                    # 彻底剔除 price，强制要求 item_id
                     "required": ["item_id", "item_name", "address"]
                 }
             }
         }
     ]
 
-    print("🤖 [Agent 核心] 正在向带有 Tools 的云端大脑发送最终请求...")
-    response = ai_client.chat.completions.create(
-        model="glm-4.5-flash", 
-        messages=messages,
-        tools=tools, # 🌟 把工具盒递给 AI
-        max_tokens=4096,
-        temperature=0.4 
-    )
-    
-    ai_message = response.choices[0].message
-    reply = ai_message.content or "抱歉老板，我刚才脑子短路了一下，能麻烦您重新说一次吗？"
-    # === 🌟 拦截并解析 AI 的行为 ===
-    if ai_message.tool_calls:
-        print("⚡ [Function Calling] AI 决定执行工具调用！正在触发下单流程！")
-        tool_call = ai_message.tool_calls[0]
-        if tool_call.function.name == "create_order":
-            args = json.loads(tool_call.function.arguments)
+    # === 🌟 核心魔法：异步流式生成器 (将原本的逻辑包裹进来) ===
+    async def generate_chat_stream():
+        print("🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...")
+        response = ai_client.chat.completions.create(
+            model="glm-4.5-flash", 
+            messages=messages,
+            tools=tools,
+            stream=True  # 👈 核心参数：开启流！
+        )
+        
+        tool_call_name = ""
+        tool_call_args = ""
+        full_reply_text = ""
+
+        # 🌟 滴水穿石：读取打字机输出
+        for chunk in response:
+            delta = chunk.choices[0].delta
             
-            # 安全提取，设置默认值为 0 或 None 以防 AI 发疯
+            # 悄悄拦截工具调用的 JSON 字符串片段
+            if delta.tool_calls:
+                tc = delta.tool_calls[0]
+                if tc.function.name: tool_call_name += tc.function.name
+                if tc.function.arguments: tool_call_args += tc.function.arguments
+                
+            # 直接将正常的聊天文字喷射给前端
+            elif delta.content:
+                full_reply_text += delta.content
+                yield f"data: {json.dumps({'content': delta.content})}\n\n"
+        
+        # ==========================================
+        # 🌟 流接收完毕！在这里执行你的【绝对防御业务逻辑】
+        # ==========================================
+        # ==========================================
+        # 🌟 流接收完毕！在这里执行你的【绝对防御业务逻辑】
+        # ==========================================
+        if tool_call_name == "create_order":
+            print(f"⚡ [Function Calling] 拦截到完整参数: {tool_call_args}")
+            args = json.loads(tool_call_args)
+            
             item_id = args.get("item_id", 0) 
             item_name = args.get("item_name", "未知商品")
-            address = args.get("address", "未知地址")
+            address = args.get("address", "") # 默认设为空
             
-            # === 🌟 架构师安全防线：用主键 ID 进行绝对精准的物理验证！ ===
-            print(f"🛡️ [安全校验] 正在数据库核实 ID={item_id} 的真实存在与价格...")
-            
-            # 抛弃缓慢且容易串标的 ilike 模糊匹配，直接使用 id == item_id
-            price_query = (
-                select(models.ItemModel)
-                .where(models.ItemModel.id == item_id)
-                .where(models.ItemModel.is_offer == True)
-                .where(models.ItemModel.is_sold == False) # 顺便检查一下是不是刚被别人抢走了
-            )
-            price_result = await db.execute(price_query)
-            real_item = price_result.scalars().first()
-            
-            if not real_item:
-                # 防御 AI 幻觉：如果 AI 编造了一个 ID，或者商品刚刚被卖掉
-                reply = f"抱歉老板，您想买的【{item_name}】刚才好像被别人抢先拍下，或者库存出现异常了。要不要看看别的？"
+            # === 🌟 架构师的终极防骗拦截：没地址？滚回去问！ ===
+            if not address or len(address) < 5 or address == "未知地址":
+                print("❌ [安全拦截] AI 试图在没有地址的情况下发货，已打回！")
+                refuse_msg = f"\n\n老板，您还没告诉我**详细的收货地址**呢！请把省市区街道等详细地址发我，我立刻给您下单【{item_name}】！"
+                full_reply_text += refuse_msg
+                yield f"data: {json.dumps({'content': refuse_msg})}\n\n"
             else:
-                # 1. 物理锁死商品状态：从货架上永远抹除它
-                real_item.is_sold = True
-                real_item.buyer_id = current_user.id
+                # === 地址正常，开始核实数据库 ===
+                print(f"🛡️ [安全校验] 正在数据库核实 ID={item_id} 的真实存在与价格...")
+                price_query = select(models.ItemModel).where(models.ItemModel.id == item_id).where(models.ItemModel.is_offer == True).where(models.ItemModel.is_sold == False)
+                price_result = await db.execute(price_query)
+                real_item = price_result.scalars().first()
                 
-                # 2. 生成真实的物理订单 (假设你有 OrderModel)
-                new_order = models.OrderModel(
-                    buyer_id=current_user.id,
-                    item_id=real_item.id, # 严格绑定物理 ID
-                    status="pending",     # 订单状态：待发货
-                    price=real_item.price
-                )
-                db.add(new_order)
-                
-                # 3. 提交事务，让数据不可逆地刻进硬盘
-                try:
-                    await db.commit()
-                except Exception as e:
-                    await db.rollback()
-                    print(f"🚨 [致命错误] 数据库写入失败: {e}")
-                    reply = "抱歉老板，系统刚打了个冷颤，订单没能写入成功，钱没扣，请稍后再试！"
-                    return {"reply": reply}
-                
-                # 4. 数据落盘成功后，再触发飞书告警（顺序绝不能反！）
-                send_feishu_alert_task.delay(real_item.name, real_item.price, current_user.email, address)
-                
-                reply = f"🎉 搞定啦老板！您的【{real_item.name}】已经为您下单，我们马上安排发往：**{address}**！随时为您跟进物流状态哦！"
-    
-    # ===================================================
-    # 💾 记忆写入 2：保存 AI 的回复
-    # ===================================================
-    new_ai_record = models.AIChatRecord(
-        user_id=current_user.id, role="assistant", content=reply
-    )
-    db.add(new_ai_record)
-    await db.commit() # 再次存入硬盘！
-    
-    return {"reply": reply}
+                if not real_item:
+                    fail_msg = f"\n\n抱歉老板，您想买的【{item_name}】刚才好像被别人抢先拍下，或者库存出现异常了。要不要看看别的？"
+                    full_reply_text += fail_msg
+                    yield f"data: {json.dumps({'content': fail_msg})}\n\n"
+                else:
+                    # 1. 物理锁死商品状态
+                    real_item.is_sold = True
+                    real_item.buyer_id = current_user.id
+                    
+                    try:
+                        await db.commit()
+                        # 发送飞书告警
+                        send_feishu_alert_task.delay(real_item.name, real_item.price, current_user.email, address)
+                        
+                        success_msg = f"\n\n🎉 搞定啦老板！您的【{real_item.name}】已经为您下单，我们马上安排发往：**{address}**！"
+                        full_reply_text += success_msg
+                        yield f"data: {json.dumps({'content': success_msg})}\n\n"
+                    except Exception as e:
+                        await db.rollback()
+                        err_msg = "\n\n抱歉老板，系统刚打了个冷颤，订单没能写入成功，钱没扣，请稍后再试！"
+                        full_reply_text += err_msg
+                        yield f"data: {json.dumps({'content': err_msg})}\n\n"
+                    
+        # 💾 无论发生了什么，最后将完整的句子存入数据库！
+        new_ai_record = models.AIChatRecord(user_id=current_user.id, role="assistant", content=full_reply_text)
+        db.add(new_ai_record)
+        await db.commit()
+        
+        # 宣告本次流式连接彻底结束
+        yield "data: [DONE]\n\n"
+
+    # 将上面打包好的水龙头，返回给 FastAPI 的引擎
+    return StreamingResponse(generate_chat_stream(), media_type="text/event-stream")
 
 ## === 🌟 个人中心：数据看板聚合接口 ===
 @router.get("/dashboard/me")
