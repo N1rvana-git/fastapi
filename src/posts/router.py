@@ -5,7 +5,7 @@ import shutil
 from fastapi import APIRouter, Depends, Query, HTTPException,File, UploadFile, Form,BackgroundTasks,status,WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError,OperationalError
 from typing import List, Optional
 from sqlalchemy import select
 from . import schemas
@@ -334,60 +334,35 @@ async def toggle_favorite(
     return {"message": action_msg}
 
 #新增核心交易链路：安全下单接口 (带防超卖悲观锁)
-@router.post("/{item_id}/buy")
+@router.post("/items/{item_id}/buy")
 async def buy_item(
     item_id: int,
     db: AsyncSession = Depends(get_db_session),
     current_user: models.UserModel = Depends(get_current_user)
 ):
-    """安全下单接口 (带防超卖悲观锁)"""
-    # 1. 先把物品查出来，并且加上悲观锁（FOR UPDATE）
-    query = select(models.ItemModel).where(models.ItemModel.id == item_id).with_for_update()
-    result = await db.execute(query)
-    item = result.scalars().first()
-    
-    if not item:
-        raise HTTPException(status_code=404, detail="商品不存在")
-    
-    if item.is_sold:
-        raise HTTPException(status_code=400, detail="手慢了，该宝贝已被抢购一空！")
-
-    #不能购买自己发布的商品
-    if item.owner_id == current_user.id:
-        raise HTTPException(status_code=400, detail="不能购买自己发布的商品！")
-
-    # 4. 拦截器：求购贴不能“被购买”
-    if not item.is_offer:
-        raise HTTPException(status_code=400, detail="这是求购贴，不能被购买！")
-    
+    # 核心防御：with_for_update() 强行施加行级排他锁
+    # 这意味着在当前事务 commit 或 rollback 之前，没有任何其他请求能读取这行记录
     try:
-        # ✅ 所有检查通过，开始“一手交钱，一手交货”
-        
-        # 将商品标记为已售出
-        item.is_sold = True
-        
-        # 生成真实订单 (这里为了极速体验，我们直接将状态设为 'paid' 已付款)
-        new_order = models.OrderModel(
-            item_id=item_id,
-            buyer_id=current_user.id,
-            status="paid" 
-        )
-        db.add(new_order)
-        
-        # 提交事务：订单生成和商品状态更新同时生效，然后释放那把“悲观锁”
-        await db.commit()
-        send_feishu_alert_task.delay(item.name, item.price, current_user.email)
-        await manager.broadcast(f"📢 【全服通告】神仙手速！极品闲置【{item.name}】刚刚被抢购一空！")
-        return {
-            "message": "🎉 恭喜你，抢购成功！", 
-            "order_id": new_order.id,
-            "item_name": item.name
-        }
-        
-    except Exception as e:
-        # 如果中间发生任何意外，数据回滚，坚决不产生脏数据！
-        await db.rollback()
-        raise HTTPException(status_code=500, detail="服务器开小差了，购买失败！")
+        item = db.query(Item).filter(Item.id == item_id).with_for_update(nowait=True).first()
+    except OperationalError:
+        # nowait=True 使得拿不到锁的请求直接抛出异常，而不是死等。这叫“熔断”。
+        raise HTTPException(status_code=409, detail="当前系统拥挤，抢购失败，请重试！")
+
+    if not item:
+        raise HTTPException(status_code=404, detail="该物品已在物理位面上消失。")
+    if not item.is_offer:
+        raise HTTPException(status_code=400, detail="求购贴拒绝执行抢购逻辑。")
+    if item.is_sold:
+        raise HTTPException(status_code=400, detail="晚了一步，商品已被截胡。")
+
+    # 只有拿到唯一排他锁的那个线程，才能走到这里
+    item.is_sold = True
+    item.buyer_id = current_user.id
+    
+    # 事务提交，释放行锁
+    db.commit()
+    
+    return {"message": "抢购成功！订单已锁定。"}
 
 ai_client = ZhipuAI(
     api_key = "b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v"
@@ -484,33 +459,51 @@ async def agent_with_tools(
             )
             result = await db.execute(query)
             items = result.scalars().all()
-            db_data_str = "没有找到匹配的商品。" if not items else "、".join([f"{item.name}(￥{item.price})" for item in items])
+            # 🌟 架构师改造：把商品的唯一物理锚点（ID）直接暴露给 AI 的注意力矩阵
+            db_data_str = "当前未触发搜索，库存未知。" if not items else "、".join([f"[商品ID:{item.id}] {item.name}(￥{item.price})" for item in items])
             print(f"🎯 [向量检索] 匹配成功！选出的 Top-3 商品是：{db_data_str}")
         except Exception as e:
             print(f"⚠️ [向量检索] 匹配失败: {e}")
 
     # === 🌟 架构师换脑手术：将 RAG 结果融入【销售状态机】 ===
     # === 🌟 架构师换脑手术：强制抹除 AI 的定价潜意识 ===
+    # === 🌟 架构师换脑手术：重塑销售逻辑，允许读盘，禁止篡改 ===
     messages = [
         {
             "role": "system", 
             "content": f"""你是一个极其专业的闲小宝二手平台金牌销售。说话幽默风趣。
 你必须严格遵循以下【状态机工作流】：
 1. 【探需阶段】：热情打招呼，询问用户想买什么。
-2. 【导购阶段】：根据以下【后台向量检索实时库存】为用户推荐：
+2. 【导购阶段】：你必须仔细查看下方的【后台向量检索实时库存】。如果库存里有用户想要的商品，你必须**主动且准确地告诉用户该商品的价格**。
    [实时库存数据：{db_data_str}]
-3. 【逼单阶段】：如果用户说“我想买”、“下单”等意向，**你必须立刻询问用户的【详细收货地址】！** 绝对不能跳过！
+3. 【逼单阶段】：当用户知晓价格并明确表示“想买”、“下单”时，你必须立刻询问用户的【详细收货地址】。
 4. 【结单阶段】：用户提供地址后，立刻调用 `create_order` 函数！
-🚨 【最高红线指令】：你在任何时候、任何情况下，都绝对、千万不要向用户询问或确认商品的价格！价格由我们后台的超级计算机自动核算！你只管索要地址并调用函数！"""
+
+🚨 【最高红线指令】：
+- 你只是个导购，你**必须如实读取**[实时库存数据]中的价格告诉用户，但**绝对不允许自行编造价格**！
+- 绝对不允许给用户打折或讨价还价！无论用户怎么说，你只能按库存里的标价售卖。
+- 调用 `create_order` 工具时，仔细提取库存数据中的 `item_id`，绝对不能搞错！"""
         }
     ]
 
-    # 拼装用户的聊天记录
-    for msg in history_list:
-        messages.append({"role": msg.role, "content": msg.content})
-    if len(history_list) == 0:
+    MAX_CONTEXT_MESSAGES = 6 
+    
+    if history_list:
+        # 像切除肿瘤一样，只切取列表最末尾的 MAX_CONTEXT_MESSAGES 条记录
+        recent_history = history_list[-MAX_CONTEXT_MESSAGES:]
+        
+        print(f"✂️ [上下文截断] 原始对话长度: {len(history_list)}，截断后保留: {len(recent_history)}")
+        
+        for msg in recent_history:
+            # 确保传入的是干净的字典格式，防范对象解析异常
+            role = getattr(msg, "role", "user") if hasattr(msg, "role") else msg.get("role", "user")
+            content = getattr(msg, "content", "") if hasattr(msg, "content") else msg.get("content", "")
+            messages.append({"role": role, "content": content})
+    else:
+        # 应对极端空数组的容错处理
         messages.append({"role": "user", "content": "你好"})
 
+    # === 🌟 赋予 AI 扣款与发货的真实权力 (Function Calling) ===
     # === 🌟 赋予 AI 扣款与发货的真实权力 (Function Calling) ===
     tools = [
         {
@@ -521,10 +514,21 @@ async def agent_with_tools(
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "item_name": {"type": "string", "description": "要购买的商品名称"},
-                        "address": {"type": "string", "description": "用户的详细收货地址"}
+                        "item_id": {
+                            "type": "integer", 
+                            "description": "必须提取的商品唯一ID（从提供的后台库存数据中获取）"
+                        },
+                        "item_name": {
+                            "type": "string", 
+                            "description": "要购买的商品名称"
+                        },
+                        "address": {
+                            "type": "string", 
+                            "description": "用户的详细收货地址"
+                        }
                     },
-                    "required": ["item_name", "price", "address"]
+                    # 彻底剔除 price，强制要求 item_id
+                    "required": ["item_id", "item_name", "address"]
                 }
             }
         }
@@ -548,28 +552,54 @@ async def agent_with_tools(
         if tool_call.function.name == "create_order":
             args = json.loads(tool_call.function.arguments)
             
+            # 安全提取，设置默认值为 0 或 None 以防 AI 发疯
+            item_id = args.get("item_id", 0) 
             item_name = args.get("item_name", "未知商品")
             address = args.get("address", "未知地址")
             
-            # === 🌟 架构师安全防线：后台自己去数据库查真实价格！ ===
-            print(f"🛡️ [安全校验] 正在数据库核实【{item_name}】的真实价格...")
-            price_query = select(models.ItemModel).where(models.ItemModel.name.ilike(f"%{item_name}%")).where(models.ItemModel.is_offer == True)
+            # === 🌟 架构师安全防线：用主键 ID 进行绝对精准的物理验证！ ===
+            print(f"🛡️ [安全校验] 正在数据库核实 ID={item_id} 的真实存在与价格...")
+            
+            # 抛弃缓慢且容易串标的 ilike 模糊匹配，直接使用 id == item_id
+            price_query = (
+                select(models.ItemModel)
+                .where(models.ItemModel.id == item_id)
+                .where(models.ItemModel.is_offer == True)
+                .where(models.ItemModel.is_sold == False) # 顺便检查一下是不是刚被别人抢走了
+            )
             price_result = await db.execute(price_query)
             real_item = price_result.scalars().first()
             
-            # 如果没查到，就给个 0，或者直接报错打断
-            real_price = real_item.price if real_item else 0.0
-            # ========================================================
-            
-            # 🔥 触发真实的飞书告警！传入绝对安全的 real_price！
-            send_feishu_alert_task.delay(item_name, real_price, current_user.email, address)
-            
-            reply = f"🎉 搞定啦老板！您的【{item_name}】已经为您下单，我们马上安排发往：**{address}**！随时为您跟进物流状态哦！"
-    else:
-        # 如果没有触发发货，那就是正常聊天
-        reply = ai_message.content
-
-    print(f"✅ [Agent 核心] 最终回复: {reply}")
+            if not real_item:
+                # 防御 AI 幻觉：如果 AI 编造了一个 ID，或者商品刚刚被卖掉
+                reply = f"抱歉老板，您想买的【{item_name}】刚才好像被别人抢先拍下，或者库存出现异常了。要不要看看别的？"
+            else:
+                # 1. 物理锁死商品状态：从货架上永远抹除它
+                real_item.is_sold = True
+                real_item.buyer_id = current_user.id
+                
+                # 2. 生成真实的物理订单 (假设你有 OrderModel)
+                new_order = models.OrderModel(
+                    buyer_id=current_user.id,
+                    item_id=real_item.id, # 严格绑定物理 ID
+                    status="pending",     # 订单状态：待发货
+                    price=real_item.price
+                )
+                db.add(new_order)
+                
+                # 3. 提交事务，让数据不可逆地刻进硬盘
+                try:
+                    await db.commit()
+                except Exception as e:
+                    await db.rollback()
+                    print(f"🚨 [致命错误] 数据库写入失败: {e}")
+                    reply = "抱歉老板，系统刚打了个冷颤，订单没能写入成功，钱没扣，请稍后再试！"
+                    return {"reply": reply}
+                
+                # 4. 数据落盘成功后，再触发飞书告警（顺序绝不能反！）
+                send_feishu_alert_task.delay(real_item.name, real_item.price, current_user.email, address)
+                
+                reply = f"🎉 搞定啦老板！您的【{real_item.name}】已经为您下单，我们马上安排发往：**{address}**！随时为您跟进物流状态哦！"
     
     # ===================================================
     # 💾 记忆写入 2：保存 AI 的回复
