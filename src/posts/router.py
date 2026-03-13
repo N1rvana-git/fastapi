@@ -13,6 +13,8 @@ from . import service
 from . import models
 from .dependencies import get_db_session
 from src.auth.dependencies import get_current_user
+from src.database import AsyncSessionLocal
+from src.posts import service as posts_service
 import asyncio
 import json
 from src.config import settings
@@ -720,3 +722,50 @@ async def get_my_dashboard(
             } for o in my_orders
         ]
     }
+
+async def process_feishu_message(event_data: dict):
+    try:
+        message = event_data.get("message", {})
+        msg_type = message.get("message_type")
+        content_str = message.get("content", "{}")
+        
+        if msg_type != "text":
+            return
+
+        content_dict = json.loads(content_str)
+        user_text = content_dict.get("text", "")
+        sender_id = event_data.get("sender", {}).get("sender_id", {}).get("open_id", "unknown")
+        
+        print(f"🤖 [后台接管] 收到用户 {sender_id} 的消息: '{user_text}'")
+
+        # ==========================================
+        # 🛡️ 灵魂拦截器：后台任务自己拿钥匙开门查数据库
+        # ==========================================
+        async with AsyncSessionLocal() as db:
+            # 1. 查户口 (调用你刚才写的技能 1)
+            current_user = await posts_service.get_user_by_feishu_id(db, sender_id)
+            
+            if not current_user:
+                # ❌ 场景 A：查无此人，拦截并发送绑定链接！
+                # 注意：这里的链接先写死一个本地前端地址，后续你做前端了再替换
+                bind_url = f"http://localhost:5173/bind-feishu?open_id={sender_id}"
+                
+                reply_text = f"老板你好！我是闲小宝。系统发现您还没绑定咱们的平台账号呢。\n请点击这里完成绑定：{bind_url}\n绑定后我才能帮您呼叫 AI 查订单哦！"
+                await send_feishu_message(sender_id, reply_text)
+                
+                print(f"🚧 访客 {sender_id} 未绑定，已拦截并发送链接。")
+                return  # 直接 return，绝对不让他去消耗 AI 大脑！
+
+            # ✅ 场景 B：查到了！是尊贵的业主！
+            print(f"✅ 身份确认：飞书用户 {sender_id} 是我们尊贵的业主：{current_user.username}")
+            
+            # ==========================================
+            # 🧠 在这里，你就可以放心地把 current_user 和 user_text 
+            # 传给你之前写好的智谱大模型逻辑了！
+            # ==========================================
+            # 为了测试，我们先发一句带他名字的欢迎语：
+            reply_text = f"尊贵的业主 {current_user.username} 您好！我是闲小宝，您刚才说：{user_text}\n\n(大模型已接通，正在努力思考中...)"
+            await send_feishu_message(sender_id, reply_text)
+
+    except Exception as e:
+        print(f"❌ [后台接管] 处理飞书消息时崩溃: {e}")

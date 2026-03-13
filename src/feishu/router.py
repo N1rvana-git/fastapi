@@ -3,6 +3,7 @@ import json
 import asyncio
 from fastapi import APIRouter, Request, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
+from zhipuai import AsyncZhipuAI
 
 router = APIRouter(prefix="/feishu", tags=["Feishu"])
 
@@ -48,6 +49,8 @@ async def send_feishu_message(open_id: str, text: str):
 # ==========================================
 # 🧠 核心：后台处理大脑
 # ==========================================
+ai_client = AsyncZhipuAI(api_key="b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v")
+
 async def process_feishu_message(event_data: dict):
     try:
         # 提取用户发来的消息内容
@@ -65,10 +68,17 @@ async def process_feishu_message(event_data: dict):
         print(f"🤖 [后台接管] 收到用户 {sender_id} 的消息: '{user_text}'")
 
         # ==========================================
-        # 🌟 体验时刻：先做一个极其丝滑的“复读机”测试！
-        # 证明咱们的收发双向通道已经彻底无敌！
+        # 🌟 体验时刻：接入大语言模型！
         # ==========================================
-        reply_text = f"🤖 闲小宝飞书分机已收到！\n你刚才说的是：【{user_text}】\n\n(首席架构师正在把我的 AI 脑浆往里倒，请稍候...)"
+        response = await ai_client.chat.completions.create(
+            model="glm-4-flash",
+            messages=[
+                {"role": "system", "content": "你是一个幽默、机智的私人管家，名字叫“闲小宝飞书分机”。你的回答应该直接且自然。"},
+                {"role": "user", "content": user_text}
+            ]
+        )
+        
+        reply_text = response.choices[0].message.content
         
         # 调用刚写好的发信引擎，把消息打回用户手机！
         await send_feishu_message(sender_id, reply_text)
