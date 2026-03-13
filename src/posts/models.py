@@ -22,8 +22,10 @@ class ItemModel(Base):
     owner = relationship("UserModel", back_populates="items")
     # 关系：多对多查标签
     tags = relationship("item_TagModel", secondary="item_tag", back_populates="items", lazy="selectin")
-
+    inventory = Column(Integer, default=1, server_default='1', nullable=False)  # 新增：库存数量
     is_sold = Column(Boolean, default=False)  # 新增：是否已售出
+    inventory = Column(Integer, default=1, server_default='1', nullable=False) # 🌟 新增库存字段
+    inventory = Column(Integer, default=1, server_default='1', nullable=False) # 🌟 新增库存字段
 
     embedding = Column(Vector(1024))  # 新增：商品描述的向量表示
 

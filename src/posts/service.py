@@ -45,6 +45,13 @@ async def update_item(db: AsyncSession, db_item: models.ItemModel, item_update: 
         tags = await get_tags_by_ids(db, item_update.tag_ids)
         db_item.tags = list(tags)
 
+    # 如果更新了库存，自动同步 is_sold 状态
+    if hasattr(db_item, "inventory"):
+        if db_item.inventory > 0:
+            db_item.is_sold = False
+        else:
+            db_item.is_sold = True
+
     # 提交保存
     db.add(db_item)
     await db.commit()

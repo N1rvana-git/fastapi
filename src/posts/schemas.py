@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, ConfigDict
+from pydantic import Field, BaseModel, field_validator, ConfigDict
 from typing import Union, List
 
 class TagBase(BaseModel):
@@ -17,6 +17,7 @@ class ItemBase(BaseModel):
     price: float
     is_offer: Union[bool, None] = None
     image_path: Union[str, None] = None  # 新增图片路径字段
+    inventory: int = Field(default=1, ge=0, description="库存数量")
     
 
 # 专门用于"创建"的模型
@@ -30,11 +31,13 @@ class ItemUpdate(BaseModel):
     is_offer: Union[bool, None] = None
     tag_ids: Union[List[int], None] = None # 新增：更新物品时可以指定标签 ID 列表
     image_path: Union[str, None] = None
+    inventory: Union[int, None] = None
     
 # 专门用于"读取/响应"的模型
 class Item(ItemBase):
     id: int
     owner_id: int
+    is_sold: bool = False
     tags: List[Tag] = [] # Use Tag in response
     model_config = ConfigDict(from_attributes=True)
 

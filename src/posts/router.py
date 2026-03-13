@@ -1,4 +1,4 @@
-
+from .scraper import search_market_price
 import os
 import asyncio
 import shutil
@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from zhipuai import ZhipuAI
 from fastapi.responses import StreamingResponse
 from src.worker import inject_embedding_task,send_feishu_alert_task
+from .prompts import SALES_AGENT_SYSTEM_PROMPT
 router = APIRouter(
     prefix="/items",
     tags=["items"]
@@ -129,8 +130,8 @@ async def read_items_from_db(
 ):
     print(f"🔍 [查询参数] skip={skip}, limit={limit}, search='{search}', is_offer_filter={is_offer_filter}")
 
-    # 1.构造一个查询图纸 (顺便过滤掉已售出的商品)
-    query = select(models.ItemModel).where(models.ItemModel.is_sold == False)
+    # 1.构造一个查询图纸 (前端要求显示所有商品，无论是否有库存)
+    query = select(models.ItemModel)
     if is_offer_filter is not None:
         query = query.where(models.ItemModel.is_offer == is_offer_filter)
     if search:
@@ -154,7 +155,8 @@ async def read_items_from_db(
             "price": item.price,
             "is_offer": item.is_offer,
             "is_sold": item.is_sold,
-            "image_path": item.image_path
+            "image_path": item.image_path,
+            "inventory": item.inventory
             # 🚨 绝对不把 item.embedding 塞进来，防止序列化爆炸！
         })
 
@@ -444,12 +446,9 @@ async def agent_with_tools(
         if (msg.role if hasattr(msg, "role") else msg.get("role", "") if isinstance(msg, dict) else "") == "user"
     ]
     
-    # 🌟 核心魔法：如果当前这句话字数少于 30 个字（比如是地址、或者"好的"），
-    # 强行把用户上一句话也拼接进来，锚定大维度的搜索方向！
-    if len(user_history_texts) >= 2 and len(last_user_msg) < 30:
-        search_query = f"{user_history_texts[-2]} {last_user_msg}"
-    else:
-        search_query = last_user_msg
+    # 🌟 核心魔法：使用最近的最多 3 条用户发言（滑动窗口），防止深层聊天时语义完全断层丢失上下文！
+    recent_user_texts = user_history_texts[-3:]
+    search_query = " ".join(recent_user_texts)
 
     print(f"🔫 [向量检索] 融合语境搜索词: '{search_query}'")
     try:
@@ -459,14 +458,40 @@ async def agent_with_tools(
         query = (
             select(models.ItemModel)
             .where(models.ItemModel.is_offer == True)
-            .where(models.ItemModel.is_sold == False) # 卖掉的不搜
+            .where(models.ItemModel.inventory > 0) # 🌟 唯一真理：只要有库存，就允许卖！
             .where(models.ItemModel.embedding.is_not(None))
             .order_by(models.ItemModel.embedding.cosine_distance(query_vector))
             .limit(3)
         )
         result = await db.execute(query)
-        items = result.scalars().all()
-        db_data_str = "当前没有任何商品。" if not items else "、".join([f"ID:{item.id}-{item.name}(￥{item.price})" for item in items])
+        items = list(result.scalars().all())
+        
+        # 🌟 强行补充传统文本包含匹配：因为如果有商品没有生成向量，向量检索就永远查不到！
+        text_query = select(models.ItemModel).where(models.ItemModel.is_offer == True).where(models.ItemModel.inventory > 0)
+        text_result = await db.execute(text_query)
+        all_text_items = text_result.scalars().all()
+        
+        for item in all_text_items:
+            # 如果商品名称里的连续2个字出现在用户询问中，强制纳入结果（非常粗暴有效的兜底）
+            # 或者用户的长词出现在商品名中（如"相机" in "尼康相机"）
+            match = False
+            if len(search_query) >= 2:
+                for i in range(len(search_query)-1):
+                    bi_gram = search_query[i:i+2]
+                    if len(bi_gram.strip()) == 2 and bi_gram in item.name:
+                        match = True
+                        break
+            if match and item not in items:
+                items.append(item)
+
+        # 如果因为 Celery 没跑导致商品没有向量，或者算力偏差找不到，强行用传统 SQL 抓取最新商品！
+        if not items:
+            print("⚠️ [向量检索] 未命中任何带向量的商品，触发传统保底扫描...")
+            # ❌ 同样在这里删掉 is_sold == False ！！
+            backup_query = select(models.ItemModel).where(models.ItemModel.inventory > 0).limit(5)
+            backup_result = await db.execute(backup_query)
+            items = backup_result.scalars().all()
+        db_data_str = "当前没有任何商品。" if not items else "、".join([f"ID:{item.id}-{item.name}(￥{item.price}, 剩余{item.inventory}件)" for item in items])
         print(f"🎯 [向量检索] 匹配成功！库存：{db_data_str}")
     except Exception as e:
         print(f"⚠️ [向量检索] 失败: {e}")
@@ -478,18 +503,8 @@ async def agent_with_tools(
     messages = [
         {
             "role": "system", 
-            "content": f"""你是一个极其专业的闲小宝二手平台金牌销售。说话幽默风趣。
-你必须严格遵循以下【状态机工作流】：
-1. 【探需阶段】：热情打招呼，询问用户想买什么。
-2. 【导购阶段】：仔细查看下方的【后台向量检索实时库存】。如果库存里有用户想要的商品，必须主动且准确地告诉用户价格。
-   [实时库存数据：{db_data_str}]
-3. 【逼单阶段】：当用户知晓价格并明确表示“想买”、“下单”时，立刻询问用户的【详细收货地址】。
-4. 【结单阶段】：用户提供地址后，立刻调用 `create_order` 函数！
-5. 【售后阶段】：🌟 如果你看到聊天记录中已经存在“搞定啦老板”、“为您下单”等成功字眼，说明交易已完成！面对用户的后续回复，只需热情感谢或闲聊，**绝对不要**再去检查库存，也**绝对不要**说“商品不在售”！
-
-🚨 【最高红线指令】：
-- 绝对不允许自行编造价格！只能如实读取[实时库存数据]中的价格。
-- 调用 `create_order` 工具时，仔细提取库存数据中的 `item_id`。如果当前正处于【逼单阶段】等待用户发地址，说明你已经在之前的对话中确认过商品，请直接根据上下文记忆中的商品信息进行下单，不要受当前库存影响！"""
+            # 🌟 动态注入库存数据到 Prompt 模板中！
+            "content": SALES_AGENT_SYSTEM_PROMPT.format(db_data_str=db_data_str)
         }
     ]
 
@@ -510,8 +525,8 @@ async def agent_with_tools(
         {
             "type": "function",
             "function": {
-                "name": "create_order",
-                "description": "当且仅当用户确定购买某件商品，并且提供了详细收货地址时，调用此函数生成订单并触发发货告警",
+                "name": "search_web_price",
+                "description": "🚨【极度危险】当且仅当用户明确要求查看【外部市场价】、【全网比价】、【别人卖多少钱】时才允许调用！如果用户只是询问本平台有什么商品，绝对、绝对禁止调用此工具！",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -548,7 +563,7 @@ async def agent_with_tools(
                 tc = delta.tool_calls[0]
                 if tc.function.name: tool_call_name += tc.function.name
                 if tc.function.arguments: tool_call_args += tc.function.arguments
-                
+                yield ":keep-alive\n\n"  # 给前端发送一个心跳包，保持连接不断开
             # 直接将正常的聊天文字喷射给前端
             elif delta.content:
                 full_reply_text += delta.content
@@ -564,7 +579,10 @@ async def agent_with_tools(
             print(f"⚡ [Function Calling] 拦截到完整参数: {tool_call_args}")
             args = json.loads(tool_call_args)
             
-            item_id = args.get("item_id", 0) 
+            try:
+                item_id = int(args.get("item_id", 0))
+            except ValueError:
+                item_id = 0
             item_name = args.get("item_name", "未知商品")
             address = args.get("address", "") # 默认设为空
             
@@ -586,24 +604,69 @@ async def agent_with_tools(
                     full_reply_text += fail_msg
                     yield f"data: {json.dumps({'content': fail_msg})}\n\n"
                 else:
-                    # 1. 物理锁死商品状态
-                    real_item.is_sold = True
-                    real_item.buyer_id = current_user.id
+                    # 1. 安全扣减库存
+                    if real_item.inventory > 0:
+                        real_item.inventory -= 1
+                        
+                    # 只有库存真正归零时，才将状态锁死为售罄
+                    if real_item.inventory == 0:
+                        real_item.is_sold = True
+                    
                     
                     try:
-                        await db.commit()
-                        # 发送飞书告警
+                        # 🌟 架构师修复：先 flush 将改动推到数据库但不提交事务
+                        await db.flush()
+                        
+                        # 把消息投递给 Celery（如果有异常会直接在这里抛出）
                         send_feishu_alert_task.delay(real_item.name, real_item.price, current_user.email, address)
+                        
+                        # 确保投递成功后，再彻底提交数据库！
+                        await db.commit()
                         
                         success_msg = f"\n\n🎉 搞定啦老板！您的【{real_item.name}】已经为您下单，我们马上安排发往：**{address}**！"
                         full_reply_text += success_msg
                         yield f"data: {json.dumps({'content': success_msg})}\n\n"
                     except Exception as e:
+                        print(f"❌ [订单异常] {e}")
                         await db.rollback()
                         err_msg = "\n\n抱歉老板，系统刚打了个冷颤，订单没能写入成功，钱没扣，请稍后再试！"
                         full_reply_text += err_msg
                         yield f"data: {json.dumps({'content': err_msg})}\n\n"
-                    
+        elif tool_call_name == "search_web_price":
+            print(f"⚡ [Function Calling] AI 想要全网比价！参数: {tool_call_args}")
+            args = json.loads(tool_call_args)
+            item_name = args.get("item_name", "")
+            
+            if item_name:
+                # 🌟 修复：先把字符串在外面拼好，避开 f-string 嵌套反斜杠的坑
+                loading_msg = f"\n\n🕸️ 正在启动量子爬虫，潜入全网为老板搜索 **{item_name}** 的底价，请稍候..."
+                yield f"data: {json.dumps({'content': loading_msg})}\n\n"
+                
+                # 🚀 召唤无头浏览器去抓取！
+                market_data = await search_market_price(item_name)
+                
+                # 🌟 架构师 UI 魔法：向前端发送一个特殊的【结构化卡片标记】！
+                # 提示 AI 总结一下数据，不要直接把乱码喷给用户
+                summary_prompt = f"请用一两句话简短总结以下搜到的价格情报，告诉用户外面的价格是多少，并说一句我们平台的价格更香：\n{market_data}"
+                
+                print("🤖 [Agent] 正在让大模型总结情报...")
+                summary_response = ai_client.chat.completions.create(
+                    model="glm-4.5-flash",
+                    messages=[{"role": "user", "content": summary_prompt}],
+                    temperature=0.3
+                )
+                summary_text = summary_response.choices[0].message.content
+                
+                # 🌟 这里是重点：我们发送一个带有 specialType 的 JSON！
+                card_data = {
+                    "content": f"\n\n", # 换个行
+                    "specialType": "price_card",
+                    "itemName": item_name,
+                    "marketPriceSummary": summary_text
+                }
+                yield f"data: {json.dumps(card_data)}\n\n"
+                
+                full_reply_text += f"\n[已展示 {item_name} 的全网价格卡片]\n{summary_text}"
         # 💾 无论发生了什么，最后将完整的句子存入数据库！
         new_ai_record = models.AIChatRecord(user_id=current_user.id, role="assistant", content=full_reply_text)
         db.add(new_ai_record)
