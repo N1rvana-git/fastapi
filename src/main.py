@@ -8,7 +8,7 @@ from src.config import settings
 from health.router import router as health_router
 from src.users.router import router as users_router
 from src.auth.router import router as auth_router
-
+from src.feishu.router import router as feishu_router
 app = FastAPI(title="我的全栈二手平台")  # 或者 title=settings.APP_NAME
 from patch import add_exception_handler
 add_exception_handler(app)
@@ -19,7 +19,7 @@ from patch import add_exception_handler
 add_exception_handler(app)
 from patch import add_exception_handler
 add_exception_handler(app)
-
+app.include_router(feishu_router)
 app.add_middleware(
     CORSMiddleware,
     # 允许访问的前端地址，注意：千万不要在网址最后加斜杠 "/"
