@@ -87,3 +87,33 @@ async def get_tags_by_ids(db: AsyncSession, tag_ids: list[int]):
         return []
     result = await db.execute(select(models.item_TagModel).where(models.item_TagModel.id.in_(tag_ids)))
     return result.scalars().all()
+
+async def get_user_by_feishu_id(db: AsyncSession, feishu_open_id: str) -> models.UserModel | None:
+    """
+    🔍 技能 1：看牌认人
+    根据飞书传过来的 open_id，去数据库里捞出我们平台的真实用户。
+    如果没找到，就返回 None。
+    """
+    result = await db.execute(
+        select(models.UserModel).where(models.UserModel.feishu_open_id == feishu_open_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def bind_feishu_account(db: AsyncSession, user_id: int, feishu_open_id: str) -> models.UserModel:
+    """
+    🤝 技能 2：发牌登记 (绑定账号)
+    把飞书访客牌，钉在这个业主的档案上！
+    """
+    # 1. 先把我们平台的业主找出来 (复用你上面写好的 get_user 函数)
+    user = await db.execute(select(models.UserModel).where(models.UserModel.id == user_id)); user = user.scalar_one_or_none()
+    
+    # 2. 给他贴上飞书的标签
+    user.feishu_open_id = feishu_open_id
+    
+    # 3. 盖章确认，存入档案库 (数据库提交)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    
+    return user

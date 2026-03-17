@@ -37,7 +37,7 @@ class UserModel(Base):
     email = Column(String,index=True)
     phone = Column(String,index=True)
     hashed_password = Column(String)
-    
+    feishu_open_id = Column(String, unique=True, index=True, nullable=True)
     # 关系：反向查物品列表
     # cascade="all, delete-orphan" 表示：如果用户被删了，他的物品也会自动被删掉
     items = relationship("ItemModel", back_populates="owner", cascade="all, delete-orphan")

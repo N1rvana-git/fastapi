@@ -1,0 +1,545 @@
+INFO:     172.18.0.1:37430 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:37890 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:37898 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:37904 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:37910 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:37924 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:37928 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...
+INFO:     172.18.0.1:37932 - "GET /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45424 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:45432 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45436 - "OPTIONS /items/26 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45438 - "PUT /items/26 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:45440 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:53776 - "PUT /items/26 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:53786 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42268 - "OPTIONS /items/29 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42272 - "PUT /items/29 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:42278 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:55048 - "OPTIONS /items/28 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:55062 - "PUT /items/28 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:55068 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:56522 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:56532 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...
+INFO:     172.18.0.1:56548 - "GET /items/tags/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:56552 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:56566 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🚀 [缓存命中] 直接从 Redis 内存秒回数据！
+INFO:     172.18.0.1:56576 - "GET /items/tags/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:53652 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:53658 - "PUT /items/28 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:53662 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34510 - "PUT /items/29 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:34520 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:51888 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:51894 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:51896 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:51924 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...
+INFO:     172.18.0.1:51940 - "GET /items/tags/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:51944 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:44524 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42530 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:44524 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42532 - "OPTIONS /items/29 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42540 - "PUT /items/29 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:42552 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:38138 - "OPTIONS /items/28 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:38140 - "PUT /items/28 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:38154 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:33168 - "OPTIONS /items/26 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:33182 - "PUT /items/26 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:33190 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34744 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34756 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34770 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:34780 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34784 - "GET /items/ai/history/ HTTP/1.1" 401 Unauthorized
+🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...
+INFO:     172.18.0.1:34786 - "GET /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:38672 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42106 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42118 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42122 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:42142 - "GET /items/ai/history/ HTTP/1.1" 401 Unauthorized
+INFO:     172.18.0.1:42124 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42164 - "GET /uploads/Nitro_Wallpaper_01_3840x2400.jpg HTTP/1.1" 304 Not Modified
+INFO:     172.18.0.1:42134 - "GET /items/tags/ HTTP/1.1" 500 Internal Server Error
+INFO:     172.18.0.1:41022 - "POST /token HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:41026 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:41054 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:41038 - "GET /items/tags/ HTTP/1.1" 500 Internal Server Error
+INFO:     172.18.0.1:60576 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:60602 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:60594 - "GET /items/tags/ HTTP/1.1" 500 Internal Server Error
+🧹 [记忆管理] 收到用户 admin@qq.com 的专业级清除请求...
+INFO:     172.18.0.1:37878 - "DELETE /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:37734 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '索尼相机怎么卖'
+🎯 [向量检索] 匹配成功！库存：ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:27-电脑包(￥99.0, 剩余1件)、ID:21-不知道什么东西(￥999.0, 剩余1件)
+✂️ [上下文截断] 原始对话长度: 2，截断后保留: 2
+INFO:     172.18.0.1:37750 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '索尼相机怎么卖 你这边卖的是多少钱'
+🎯 [向量检索] 匹配成功！库存：ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:27-电脑包(￥99.0, 剩余1件)、ID:21-不知道什么东西(￥999.0, 剩余1件)
+✂️ [上下文截断] 原始对话长度: 4，截断后保留: 4
+INFO:     172.18.0.1:35210 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+INFO:     172.18.0.1:51834 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:42034 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42040 - "OPTIONS /items/?skip=8&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=8, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:42056 - "GET /items/?skip=8&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42040 - "GET /uploads/%E5%BC%95%E5%85%A5%20GAM%20%E6%A8%A1%E5%9D%97%E7%9A%84%E6%94%B9%E8%BF%9B%20YOLOv11n%20%E7%BD%91%E7%BB%9C%E6%9E%B6%E6%9E%84.png HTTP/1.1" 304 Not Modified
+INFO:     172.18.0.1:42056 - "GET /uploads/GAM%20%E5%85%A8%E5%B1%80%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%9C%BA%E5%88%B6%E7%BB%93%E6%9E%84%E7%A4%BA%E6%84%8F%E5%9B%BE.png HTTP/1.1" 304 Not Modified
+INFO:     172.18.0.1:42072 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/Nitro_Wallpaper_02_3840x2400.jpg HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:42076 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/whiteboard_exported_image.png HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:42082 - "GET /uploads/Nitro_Wallpaper_03_3840x2400.jpg HTTP/1.1" 304 Not Modified
+INFO:     172.18.0.1:42088 - "GET /uploads/%E5%A4%9A%E6%BA%90%E5%BC%82%E6%9E%84%E6%95%B0%E6%8D%AE%E7%9A%84%E5%88%86%E6%BA%90%E9%A2%84%E5%A4%84%E7%90%86%E4%B8%8E%E8%9E%8D%E5%90%88%E6%B5%81%E7%A8%8B.png HTTP/1.1" 304 Not Modified
+INFO:     172.18.0.1:42098 - "GET /string HTTP/1.1" 404 Not Found
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:42076 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '你这边卖的是多少钱 有其他相机卖吗'
+🎯 [向量检索] 匹配成功！库存：ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:27-电脑包(￥99.0, 剩余1件)
+✂️ [上下文截断] 原始对话长度: 6，截断后保留: 6
+INFO:     172.18.0.1:48220 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+INFO:     172.18.0.1:58572 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:58570 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:58586 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:58606 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:58618 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:58620 - "GET /items/tags/ HTTP/1.1" 500 Internal Server Error
+INFO:     172.18.0.1:34222 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:35698 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:35722 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:35734 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:41088 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:41090 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:35708 - "GET /items/tags/ HTTP/1.1" 500 Internal Server Error
+INFO:     172.18.0.1:37192 - "OPTIONS /items/29 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:37208 - "PUT /items/29 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:37210 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42738 - "OPTIONS /items/28 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42754 - "PUT /items/28 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:42768 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42778 - "OPTIONS /items/27 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42792 - "PUT /items/27 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:42798 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34546 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '有其他相机卖吗 我就想要相机'
+🎯 [向量检索] 匹配成功！库存：ID:27-电脑包(￥99.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:21-不知道什么东西(￥999.0, 剩余1件)
+✂️ [上下文截断] 原始对话长度: 7，截断后保留: 6
+INFO:     172.18.0.1:34554 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '有其他相机卖吗 我就想要相机'
+⚠️ [向量检索] 失败: (sqlalchemy.dialects.postgresql.asyncpg.InterfaceError) <class 'asyncpg.exceptions._base.InterfaceError'>: connection is closed
+[SQL: SELECT item.id, item.name, item.price, item.is_offer, item.image_path, item.owner_id, item.inventory, item.is_sold, item.embedding 
+FROM item 
+WHERE item.is_offer = true AND item.is_sold = false AND item.embedding IS NOT NULL ORDER BY item.embedding <=> $1 
+ LIMIT $2::INTEGER]
+[parameters: ('[0.005212824791669846,0.010002502240240574,0.03524087369441986,0.012447675690054893,0.024029381573200226,-0.0016559374053031206,0.025557467713952065, ... (21408 characters truncated) ... 5145035684108734,0.00027051224606111646,0.00013489033153746277,-0.019951578229665756,-0.042521387338638306,-0.05755801498889923,0.015563671477138996]', 3)]
+(Background on this error at: https://sqlalche.me/e/20/rvf5)
+✂️ [上下文截断] 原始对话长度: 7，截断后保留: 6
+INFO:     172.18.0.1:54426 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '我就想要相机 我看你这里不是有尼康相机吗'
+🎯 [向量检索] 匹配成功！库存：ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:27-电脑包(￥99.0, 剩余100件)
+✂️ [上下文截断] 原始对话长度: 9，截断后保留: 6
+INFO:     172.18.0.1:52644 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+INFO:     172.18.0.1:52852 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '我看你这里不是有尼康相机吗 真没有吗，我都看见了'
+🎯 [向量检索] 匹配成功！库存：ID:23-索尼微单相机(￥8999.0, 剩余1件)、ID:24-哈苏相机(￥68999.0, 剩余1件)、ID:22-啊？(￥543.0, 剩余1件)
+✂️ [上下文截断] 原始对话长度: 11，截断后保留: 6
+INFO:     172.18.0.1:52862 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+INFO:     172.18.0.1:45908 - "OPTIONS /items/?skip=8&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=8, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:45918 - "GET /items/?skip=8&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45918 - "GET /uploads/%E5%BC%95%E5%85%A5%20GAM%20%E6%A8%A1%E5%9D%97%E7%9A%84%E6%94%B9%E8%BF%9B%20YOLOv11n%20%E7%BD%91%E7%BB%9C%E6%9E%B6%E6%9E%84.png HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45930 - "GET /uploads/%E5%A4%9A%E6%BA%90%E5%BC%82%E6%9E%84%E6%95%B0%E6%8D%AE%E7%9A%84%E5%88%86%E6%BA%90%E9%A2%84%E5%A4%84%E7%90%86%E4%B8%8E%E8%9E%8D%E5%90%88%E6%B5%81%E7%A8%8B.png HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45936 - "GET /uploads/GAM%20%E5%85%A8%E5%B1%80%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%9C%BA%E5%88%B6%E7%BB%93%E6%9E%84%E7%A4%BA%E6%84%8F%E5%9B%BE.png HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45944 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/whiteboard_exported_image.png HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:45950 - "GET /uploads/Nitro_Wallpaper_03_3840x2400.jpg HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45960 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/Nitro_Wallpaper_02_3840x2400.jpg HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:45972 - "GET /string HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:53060 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:53072 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45230 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.18.0.1:45330 - "GET / HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45504 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.18.0.1:45614 - "GET / HTTP/1.1" 200 OK
+INFO:     172.18.0.1:53592 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+INFO:     172.18.0.1:51078 - "POST /items/ai/agent HTTP/1.1" 401 Unauthorized
+INFO:     172.18.0.1:51086 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:54746 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:54760 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:54774 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:54778 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:54788 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:54808 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:54804 - "GET /items/tags/ HTTP/1.1" 500 Internal Server Error
+🔫 [向量检索] 融合语境搜索词: '真没有吗，我都看见了 到底有没有相机啊'
+🎯 [向量检索] 匹配成功！库存：ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:27-电脑包(￥99.0, 剩余100件)
+✂️ [上下文截断] 原始对话长度: 13，截断后保留: 6
+INFO:     172.18.0.1:48354 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+INFO:     172.18.0.1:48356 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:53198 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42886 - "GET /p/?skip=0&limit=10 HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:56388 - "GET /p/?skip=0&limit=10 HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:58442 - "GET /p/?skip=0&limit=2 HTTP/1.1" 404 Not Found
+🔍 [查询参数] skip=0, limit=2, search='None', is_offer_filter=None
+INFO:     172.18.0.1:44454 - "GET /items/?skip=0&limit=2 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45410 - "POST /items/ai/agent HTTP/1.1" 401 Unauthorized
+INFO:     172.18.0.1:40112 - "POST /items/ai/agent HTTP/1.1" 401 Unauthorized
+🔍 [查询参数] skip=0, limit=5, search='None', is_offer_filter=None
+INFO:     172.18.0.1:56148 - "GET /items/?skip=0&limit=5 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=5, search='None', is_offer_filter=None
+INFO:     172.18.0.1:40472 - "GET /items/?skip=0&limit=5 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40822 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:48476 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+INFO:     172.18.0.1:48478 - "POST /items/ai/agent HTTP/1.1" 401 Unauthorized
+INFO:     172.18.0.1:47010 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:47026 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:47036 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:47040 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...
+INFO:     172.18.0.1:47046 - "GET /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:47058 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:47088 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '到底有没有相机啊 有相机吗'
+🎯 [向量检索] 匹配成功！库存：ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 15，截断后保留: 6
+INFO:     172.18.0.1:42164 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+INFO:     172.18.0.1:43954 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:43966 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '有相机吗 我想要佳能相机拍人像，但是好贵啊'
+🎯 [向量检索] 匹配成功！库存：ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 17，截断后保留: 6
+INFO:     172.18.0.1:44260 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '我想要佳能相机拍人像，但是好贵啊 我想了解佳能'
+🎯 [向量检索] 匹配成功！库存：ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 19，截断后保留: 6
+INFO:     172.18.0.1:45430 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '我想了解佳能 你介绍一下它'
+🎯 [向量检索] 匹配成功！库存：ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 21，截断后保留: 6
+INFO:     172.18.0.1:44868 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '你介绍一下它 我想了解功能'
+🎯 [向量检索] 匹配成功！库存：ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)
+✂️ [上下文截断] 原始对话长度: 23，截断后保留: 6
+INFO:     172.18.0.1:36338 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+INFO:     172.18.0.1:47200 - "POST /items/ai/agent HTTP/1.1" 401 Unauthorized
+INFO:     172.18.0.1:39154 - "POST /items/ai/agent HTTP/1.1" 401 Unauthorized
+INFO:     172.18.0.1:50936 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '你介绍一下它 我想了解功能 我想买相机'
+🎯 [向量检索] 匹配成功！库存：ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 25，截断后保留: 6
+INFO:     172.18.0.1:50950 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '我想了解功能 我想买相机 我想拍风景'
+🎯 [向量检索] 匹配成功！库存：ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 27，截断后保留: 6
+INFO:     172.18.0.1:57108 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+INFO:     172.18.0.1:42244 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+🧹 [记忆管理] 收到用户 admin@qq.com 的专业级清除请求...
+INFO:     172.18.0.1:42256 - "DELETE /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42268 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:59668 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:59674 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:59678 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:59690 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...
+INFO:     172.18.0.1:59692 - "GET /items/tags/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:59702 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45380 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '我想买相机'
+🎯 [向量检索] 匹配成功！库存：ID:27-电脑包(￥99.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 2，截断后保留: 2
+INFO:     172.18.0.1:45382 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '我想买相机 我想拍风景'
+🎯 [向量检索] 匹配成功！库存：ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 4，截断后保留: 4
+INFO:     172.18.0.1:49592 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '我想买相机 我想拍风景 直接购买这个吧'
+🎯 [向量检索] 匹配成功！库存：ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 6，截断后保留: 6
+INFO:     172.18.0.1:37246 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+INFO:     172.18.0.1:39786 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:38166 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+INFO:     172.18.0.1:38170 - "POST /items/ai/agent HTTP/1.1" 401 Unauthorized
+INFO:     172.18.0.1:56258 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:56262 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:56276 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:56280 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:56296 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...
+INFO:     172.18.0.1:56298 - "GET /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:56302 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '我想拍风景 直接购买这个吧 1省2市3区4街道5楼6号'
+🎯 [向量检索] 匹配成功！库存：ID:27-电脑包(￥99.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 7，截断后保留: 6
+INFO:     172.18.0.1:49014 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+⚡ [Function Calling] 拦截到完整参数: {"item_id":"28","item_name":"风景专属-尼康相机","address":"1省2市3区4街道5楼6号"}
+🛡️ [安全校验] 正在数据库核实 ID=28 的真实存在与价格...
+INFO:     172.18.0.1:56798 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45952 - "POST /token HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:45960 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45964 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...
+INFO:     172.18.0.1:45976 - "GET /items/tags/ HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '直接购买这个吧 1省2市3区4街道5楼6号 1省2市3区4街道5楼6号'
+🎯 [向量检索] 匹配成功！库存：ID:27-电脑包(￥99.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:21-不知道什么东西(￥999.0, 剩余1件)
+✂️ [上下文截断] 原始对话长度: 8，截断后保留: 6
+INFO:     172.18.0.1:51376 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+INFO:     172.18.0.1:59218 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '1省2市3区4街道5楼6号 1省2市3区4街道5楼6号 不是有尼康相机吗'
+🎯 [向量检索] 匹配成功！库存：ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 10，截断后保留: 6
+INFO:     172.18.0.1:59228 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+⚡ [Function Calling] 拦截到完整参数: {"item_id":"28","item_name":"风景专属-尼康相机","address":"1省2市3区4街道5楼6号"}
+🛡️ [安全校验] 正在数据库核实 ID=28 的真实存在与价格...
+INFO:     172.18.0.1:57600 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:57606 - "OPTIONS /items/?skip=8&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:57618 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:50478 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=8, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:50486 - "GET /items/?skip=8&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:50496 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:57600 - "GET /uploads/%E5%A4%9A%E6%BA%90%E5%BC%82%E6%9E%84%E6%95%B0%E6%8D%AE%E7%9A%84%E5%88%86%E6%BA%90%E9%A2%84%E5%A4%84%E7%90%86%E4%B8%8E%E8%9E%8D%E5%90%88%E6%B5%81%E7%A8%8B.png HTTP/1.1" 200 OK
+INFO:     172.18.0.1:57618 - "GET /string HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:50496 - "GET /uploads/Nitro_Wallpaper_03_3840x2400.jpg HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50478 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/whiteboard_exported_image.png HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:50508 - "GET /uploads/%E5%BC%95%E5%85%A5%20GAM%20%E6%A8%A1%E5%9D%97%E7%9A%84%E6%94%B9%E8%BF%9B%20YOLOv11n%20%E7%BD%91%E7%BB%9C%E6%9E%B6%E6%9E%84.png HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50520 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/Nitro_Wallpaper_02_3840x2400.jpg HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:50534 - "GET /uploads/GAM%20%E5%85%A8%E5%B1%80%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%9C%BA%E5%88%B6%E7%BB%93%E6%9E%84%E7%A4%BA%E6%84%8F%E5%9B%BE.png HTTP/1.1" 200 OK
+🔍 [查询参数] skip=8, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:50538 - "GET /items/?skip=8&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50546 - "GET /uploads/Nitro_Wallpaper_03_3840x2400.jpg HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50562 - "GET /uploads/%E5%A4%9A%E6%BA%90%E5%BC%82%E6%9E%84%E6%95%B0%E6%8D%AE%E7%9A%84%E5%88%86%E6%BA%90%E9%A2%84%E5%A4%84%E7%90%86%E4%B8%8E%E8%9E%8D%E5%90%88%E6%B5%81%E7%A8%8B.png HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50564 - "GET /uploads/%E5%BC%95%E5%85%A5%20GAM%20%E6%A8%A1%E5%9D%97%E7%9A%84%E6%94%B9%E8%BF%9B%20YOLOv11n%20%E7%BD%91%E7%BB%9C%E6%9E%B6%E6%9E%84.png HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50574 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/whiteboard_exported_image.png HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:50578 - "GET /string HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:50572 - "GET /uploads/GAM%20%E5%85%A8%E5%B1%80%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%9C%BA%E5%88%B6%E7%BB%93%E6%9E%84%E7%A4%BA%E6%84%8F%E5%9B%BE.png HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50590 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/Nitro_Wallpaper_02_3840x2400.jpg HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:39804 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40574 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40582 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40596 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40600 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...
+INFO:     172.18.0.1:40616 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40612 - "GET /items/tags/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:40632 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:47946 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34480 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34484 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34498 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34508 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:34510 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34514 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:34518 - "GET /items/tags/ HTTP/1.1" 500 Internal Server Error
+INFO:     172.18.0.1:33396 - "OPTIONS /items/?skip=24&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=24, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:33408 - "GET /items/?skip=24&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:59310 - "OPTIONS /items/23 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:59320 - "PUT /items/23 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=24, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:59332 - "GET /items/?skip=24&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40380 - "OPTIONS /items/28 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40396 - "PUT /items/28 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=24, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:40406 - "GET /items/?skip=24&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40414 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:40418 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40414 - "GET /uploads/%E4%BA%A4%E4%BA%92%E6%B5%81%E7%A8%8B%E5%9B%BE.png HTTP/1.1" 304 Not Modified
+INFO:     172.18.0.1:40434 - "GET /string HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:40446 - "GET /uploads/%E5%BC%82%E6%9E%84%E5%B1%8F%E5%B9%95%E5%9D%90%E6%A0%87%E8%87%AA%E9%80%82%E5%BA%94%E6%98%A0%E5%B0%84%E7%89%A9%E7%90%86%E6%8B%93%E6%89%91.png HTTP/1.1" 304 Not Modified
+INFO:     172.18.0.1:40454 - "GET /uploads/%E5%BC%82%E6%9E%84%E5%B1%8F%E5%B9%95%E5%9D%90%E6%A0%87%E8%87%AA%E9%80%82%E5%BA%94%E6%98%A0%E5%B0%84%E7%89%A9%E7%90%86%E6%8B%93%E6%89%91.png HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45024 - "OPTIONS /items/3 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:40454 - "PUT /items/3 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:45038 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45048 - "GET /string HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:45062 - "OPTIONS /items/18 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45072 - "PUT /items/18 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:45078 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:55470 - "GET /uploads/%E4%BA%A4%E4%BA%92%E6%B5%81%E7%A8%8B%E5%9B%BE.png HTTP/1.1" 200 OK
+INFO:     172.18.0.1:55474 - "OPTIONS /items/1 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45072 - "PUT /items/1 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:45078 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:55488 - "OPTIONS /items/22 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:55500 - "PUT /items/22 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:43794 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:55488 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/whiteboard_exported_image.png HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:43798 - "OPTIONS /items/24 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:43800 - "PUT /items/24 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:55488 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:43800 - "GET /string HTTP/1.1" 404 Not Found
+🧹 [记忆管理] 收到用户 admin@qq.com 的专业级清除请求...
+INFO:     172.18.0.1:43806 - "DELETE /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:42200 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '有没有相机推荐'
+🎯 [向量检索] 匹配成功！库存：ID:23-索尼微单相机(￥8999.0, 剩余999件)、ID:24-哈苏相机(￥68999.0, 剩余100件)、ID:22-啊？(￥543.0, 剩余100件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 2，截断后保留: 2
+INFO:     172.18.0.1:42204 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '有没有相机推荐 我想拍人像，选什么呢'
+🎯 [向量检索] 匹配成功！库存：ID:23-索尼微单相机(￥8999.0, 剩余999件)、ID:24-哈苏相机(￥68999.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:19-不知道上传了什么(￥1188.0, 剩余1件)、ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 4，截断后保留: 4
+INFO:     172.18.0.1:37190 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '有没有相机推荐 我想拍人像，选什么呢 索尼挺不错的'
+🎯 [向量检索] 匹配成功！库存：ID:23-索尼微单相机(￥8999.0, 剩余999件)、ID:24-哈苏相机(￥68999.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:19-不知道上传了什么(￥1188.0, 剩余1件)、ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 6，截断后保留: 6
+INFO:     172.18.0.1:59236 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '我想拍人像，选什么呢 索尼挺不错的 1省2市3区4街道5楼6号，发什么快递'
+🎯 [向量检索] 匹配成功！库存：ID:23-索尼微单相机(￥8999.0, 剩余999件)、ID:24-哈苏相机(￥68999.0, 剩余100件)、ID:22-啊？(￥543.0, 剩余100件)、ID:19-不知道上传了什么(￥1188.0, 剩余1件)、ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 8，截断后保留: 6
+INFO:     172.18.0.1:37158 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '索尼挺不错的 1省2市3区4街道5楼6号，发什么快递 马上发货吧'
+🎯 [向量检索] 匹配成功！库存：ID:23-索尼微单相机(￥8999.0, 剩余999件)、ID:24-哈苏相机(￥68999.0, 剩余100件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:19-不知道上传了什么(￥1188.0, 剩余1件)、ID:21-不知道什么东西(￥999.0, 剩余1件)
+✂️ [上下文截断] 原始对话长度: 10，截断后保留: 6
+INFO:     172.18.0.1:48958 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+⚡ [Function Calling] 拦截到完整参数: {"item_id":"23","item_name":"索尼微单相机","address":"1省2市3区4街道5楼6号"}
+🛡️ [安全校验] 正在数据库核实 ID=23 的真实存在与价格...
+🔫 [向量检索] 融合语境搜索词: '1省2市3区4街道5楼6号，发什么快递 马上发货吧 为什么没成功，快给我发货'
+🎯 [向量检索] 匹配成功！库存：ID:22-啊？(￥543.0, 剩余100件)、ID:21-不知道什么东西(￥999.0, 剩余1件)、ID:27-电脑包(￥99.0, 剩余100件)、ID:19-不知道上传了什么(￥1188.0, 剩余1件)
+✂️ [上下文截断] 原始对话长度: 12，截断后保留: 6
+INFO:     172.18.0.1:50336 - "POST /items/ai/agent HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45146 - "POST /items/ai/agent HTTP/1.1" 401 Unauthorized
+INFO:     172.18.0.1:53638 - "POST /items/ai/agent HTTP/1.1" 401 Unauthorized
+INFO:     172.18.0.1:51064 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:46856 - "OPTIONS /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:46862 - "DELETE /items/ai/history/ HTTP/1.1" 401 Unauthorized
+INFO:     172.18.0.1:49136 - "POST /token HTTP/1.1" 200 OK
+INFO:     172.18.0.1:49148 - "OPTIONS /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:49162 - "OPTIONS /items/tags/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:49168 - "GET /items/ai/history/ HTTP/1.1" 200 OK
+🐢 [缓存未命中] 内存里没有，老老实实去查 PostgreSQL 数据库...
+INFO:     172.18.0.1:49172 - "GET /items/tags/ HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:49182 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+🧹 [记忆管理] 收到用户 admin@qq.com 的专业级清除请求...
+INFO:     172.18.0.1:60624 - "DELETE /items/ai/history/ HTTP/1.1" 200 OK
+INFO:     172.18.0.1:60630 - "OPTIONS /items/ai/agent HTTP/1.1" 200 OK
+🔫 [向量检索] 融合语境搜索词: '有没有相机推荐呢'
+🎯 [向量检索] 匹配成功！库存：ID:23-索尼微单相机(￥8999.0, 剩余998件)、ID:24-哈苏相机(￥68999.0, 剩余100件)、ID:22-啊？(￥543.0, 剩余100件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 2，截断后保留: 2
+INFO:     172.18.0.1:60642 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '有没有相机推荐呢 我想拍风景之类的'
+🎯 [向量检索] 匹配成功！库存：ID:23-索尼微单相机(￥8999.0, 剩余998件)、ID:24-哈苏相机(￥68999.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 4，截断后保留: 4
+INFO:     172.18.0.1:37202 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '有没有相机推荐呢 我想拍风景之类的 可以呀'
+🎯 [向量检索] 匹配成功！库存：ID:23-索尼微单相机(￥8999.0, 剩余998件)、ID:24-哈苏相机(￥68999.0, 剩余100件)、ID:26-罗尼库尔曼的8届奥林匹亚先生冠军(￥999999.0, 剩余8件)、ID:29-人像专属-佳能相机(￥12999.0, 剩余999件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 6，截断后保留: 6
+INFO:     172.18.0.1:40034 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+🔫 [向量检索] 融合语境搜索词: '我想拍风景之类的 可以呀 1省2市3区4街道5楼6号'
+🎯 [向量检索] 匹配成功！库存：ID:23-索尼微单相机(￥8999.0, 剩余998件)、ID:24-哈苏相机(￥68999.0, 剩余100件)、ID:22-啊？(￥543.0, 剩余100件)、ID:28-风景专属-尼康相机(￥10999.0, 剩余999件)
+✂️ [上下文截断] 原始对话长度: 8，截断后保留: 6
+INFO:     172.18.0.1:35632 - "POST /items/ai/agent HTTP/1.1" 200 OK
+🤖 [Agent 核心] 开启水龙头！向带有 Tools 的云端大脑发送流式请求...
+⚡ [Function Calling] 拦截到完整参数: {"item_id":"28","item_name":"风景专属-尼康相机","address":"1省2市3区4街道5楼6号"}
+🛡️ [安全校验] 正在数据库核实 ID=28 的真实存在与价格...
+INFO:     172.18.0.1:39814 - "OPTIONS /items/?skip=24&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=24, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:39822 - "GET /items/?skip=24&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:39834 - "GET /string HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:36946 - "OPTIONS /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:36956 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:36946 - "GET /string HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:36968 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/Nitro_Wallpaper_02_3840x2400.jpg HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:36976 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/whiteboard_exported_image.png HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:46436 - "OPTIONS /items/?skip=8&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=8, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:46440 - "GET /items/?skip=8&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=16, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:46448 - "GET /items/?skip=16&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:46436 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/whiteboard_exported_image.png HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:46456 - "GET /string HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:46458 - "GET /https%3A//my-enterprise-bucket.s3.amazonaws.com/images/Nitro_Wallpaper_02_3840x2400.jpg HTTP/1.1" 404 Not Found
+🔍 [查询参数] skip=8, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:46458 - "GET /items/?skip=8&limit=8 HTTP/1.1" 200 OK
+🔍 [查询参数] skip=0, limit=8, search='None', is_offer_filter=None
+INFO:     172.18.0.1:60976 - "GET /items/?skip=0&limit=8 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:46180 - "POST /feishu/webhook HTTP/1.1" 404 Not Found
+🚨 [安全拦截] 收到伪造的飞书请求，Token 校验失败！
+INFO:     172.18.0.1:57690 - "POST /feishu/webhook HTTP/1.1" 403 Forbidden
+🚨 [安全拦截] 收到伪造的飞书请求，Token 校验失败！
+INFO:     172.18.0.1:37176 - "POST /feishu/webhook HTTP/1.1" 403 Forbidden
+🤝 [飞书验证] 成功接收并校验 Challenge 暗号！
+INFO:     172.18.0.1:59582 - "POST /feishu/webhook HTTP/1.1" 200 OK
+🤝 [飞书验证] 成功接收并校验 Challenge 暗号！
+INFO:     172.18.0.1:50396 - "POST /feishu/webhook HTTP/1.1" 200 OK
+🤝 [飞书验证] 成功接收并校验 Challenge 暗号！
+INFO:     172.18.0.1:54290 - "POST /feishu/webhook HTTP/1.1" 200 OK
+🤝 [飞书验证] 成功接收并校验 Challenge 暗号！
+INFO:     172.18.0.1:52604 - "POST /feishu/webhook HTTP/1.1" 200 OK
