@@ -31,7 +31,21 @@ jobs:
         # 严格检查！如果代码里有致命语法错误（比如少写括号），直接在这里熔断报错，绝不部署到生产环境！
         flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
 
-    - name: 🚀 第五步：自动化部署 (模拟)
+    # ==========================================
+    # 🌟 新增：第五步：云端实弹演习 (跑你写的单元测试)
+    # ==========================================
+    - name: 🧪 第五步：执行自动化防爆盾测试 (Pytest)
+      env: # 偷偷给机器人塞几个假的环境变量，防止它连不上真实的数据库而罢工
+        DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/test_db"
+        REDIS_URL: "redis://localhost:6379/0"
+      run: |
+        # 顺便装一下测试框架
+        pip install pytest httpx
+        # 跑测试！如果这里报错，下面的部署步骤会直接被腰斩，保护生产环境！
+        pytest tests/ -v
+
+
+    - name: 🚀 第六步：自动化部署 (模拟)
       run: |
         echo "=========================================="
         echo "🎉 恭喜！代码审查全绿通过！没有任何致命 Bug！"

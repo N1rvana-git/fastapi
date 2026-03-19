@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Request, BackgroundTasks, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from zhipuai import ZhipuAI
-
+import redis.asyncio as aioredis
 from sqlalchemy import select, desc, delete
 from src.posts.prompts import SALES_AGENT_SYSTEM_PROMPT
 from src.posts.scraper import search_market_price
@@ -25,7 +25,7 @@ from src.posts.dependencies import get_db_session
 from src.posts import models
 from src.posts import service as posts_services
 router = APIRouter(prefix="/feishu", tags=["Feishu"])
-
+redis_client = aioredis.Redis(host='redis', port=6379, db=0, decode_responses=True)
 class BindFeishuRequest(BaseModel):
     open_id: str
 
@@ -109,6 +109,42 @@ async def process_feishu_message(event_data: dict):
         sender_id = event_data.get("sender", {}).get("sender_id", {}).get("open_id", "unknown")
         
         print(f"🤖 [后台接管] 收到用户 {sender_id} 的消息: '{user_text}'")
+
+        
+
+        # ==========================================
+        # 🛑 智能闸机：Redis 分布式高并发限流
+        # ==========================================
+        if sender_id != "unknown":
+            # 1. 制作每个用户专属的“计次卡”名字
+            rate_limit_key = f"feishu:rate_limit:{sender_id}"
+            
+            try:
+                # 2. Redis 原子操作：在卡上打孔 (+1)
+                current_count = await redis_client.incr(rate_limit_key)
+            except Exception as e:
+                print(f"⚠️ Redis连接失败，跳过防爆盾机制: {e}")
+                current_count = 1  # 降级处理，允许通过
+                
+            
+            # 3. 如果是第一次打孔，给这张卡设定一个 60 秒后自动销毁的定时炸弹！
+            if current_count == 1:
+                try:
+                    await redis_client.expire(rate_limit_key, 60)
+                except Exception:
+                    pass
+                
+            # 4. 保安核心逻辑：检查打孔次数
+            if current_count > 3:
+                print(f"🛑 [防爆盾触发] 飞书用户 {sender_id} 呼叫过于频繁 (一分钟内第 {current_count} 次)！已强行拦截！")
+                
+                # 温柔地提示用户被限流了
+                await send_feishu_message(sender_id, "🛑 老板，我脑子转冒烟了！您的手速太快了，请休息一分钟再接着聊吧！🥵")
+                
+                # 🌟 极其关键的一步：直接 return！
+                # 绝对不允许代码继续往下走，保护数据库和大模型！
+                return 
+        # ==========================================
 
         # ==========================================
         # 🛡️ 灵魂拦截器：后台任务自己拿钥匙开门查数据库

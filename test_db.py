@@ -1,17 +1,10 @@
 import asyncio
-from src.database import async_session_maker
-from src.posts.models import ItemModel
-from sqlalchemy import select
+from src.database import AsyncSessionLocal
+from sqlalchemy import text
 
-async def main():
-    async with async_session_maker() as db:
-        item_id = 28
-        price_query = select(ItemModel).where(ItemModel.id == item_id).where(ItemModel.is_offer == True).where(ItemModel.is_sold == False)
-        print(price_query.compile(compile_kwargs={"literal_binds": True}))
-        try:
-            res = await db.execute(price_query)
-            print(res.scalars().first())
-        except Exception as e:
-            print("ERROR", str(e))
+async def test():
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(text("SELECT 1"))
+        print(res.scalar())
 
-asyncio.run(main())
+asyncio.run(test())

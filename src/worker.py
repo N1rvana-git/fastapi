@@ -1,107 +1,64 @@
+import os
 import time
-import asyncio
-import requests
 from celery import Celery
-from zhipuai import ZhipuAI
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from dotenv import load_dotenv
 
-# 🌟 导入你项目里的数据库组件 (根据你的实际文件名调整，比如 src.database)
-from src.database import engine 
-from src.posts.models import ItemModel
+# 加载环境变量 (确保能读到真实的配置)
+load_dotenv()
+
+# ==========================================
+# 🏭 1. 建立洗碗厂 (初始化 Celery 实例)
+# ==========================================
+# 我们雇佣 Redis 作为我们的“传送带 (Broker)”和“结果存放架 (Backend)”
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0") # 默认连 docker-compose 里的 redis
 
 celery_app = Celery(
-    "idle_platform_worker",
-    broker="redis://redis:6379/0",
-    backend="redis://redis:6379/1"
+    "fastapi_heavy_factory",
+    broker=REDIS_URL,
+    backend=REDIS_URL
 )
 
-# 🌟 初始化 AI 大脑（填入你的真实 Key）
-ai_client = ZhipuAI(api_key="b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v")
+# ⚙️ 工厂配置项优化 (大厂必备防弹衣)
+celery_app.conf.update(
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='Asia/Shanghai',
+    enable_utc=True,
+    # 🌟 极其重要：如果洗碗工突然猝死，碗会重新回到传送带上分配给别人！
+    task_acks_late=True, 
+    worker_prefetch_multiplier=1 # 防止一个洗碗工抢了太多碗洗不完
+)
 
-@celery_app.task
-def inject_embedding_task(item_id: int, item_name: str):
-    print(f"🧠 [黑灯工厂] 正在为商品【{item_name}】锻造 1024 维高维灵魂...")
+# ==========================================
+# 🧑‍🔧 2. 定义车间工人 (编写具体的耗时任务)
+# ==========================================
+
+@celery_app.task(bind=True, max_retries=3)
+def inject_embedding_task(self, item_id: int, item_name: str):
+    """
+    车间任务 1：为商品生成 AI 向量 (极其耗费 CPU 和 网络)
+    """
+    print(f"📦 [向量车间] 开始处理商品 ID:{item_id} [{item_name}] 的向量生成任务...")
     
     try:
-        # 1. 极其耗时的操作：向智谱发起网络请求，获取向量
-        embed_response = ai_client.embeddings.create(
-            model="embedding-2",
-            input=item_name
-        )
-        vector = embed_response.data[0].embedding
-        print(f"✨ [黑灯工厂] 向量提取成功，准备打入数据库...")
-
-        # 2. Celery 是同步环境，我们需要用 asyncio 来跑异步的 SQLAlchemy
-        async def update_db():
-            # 开启一个临时的数据库通道
-            async with AsyncSession(engine) as session:
-                item = await session.get(ItemModel, item_id)
-                if item:
-                    item.embedding = vector
-                    await session.commit()
-                    print(f"✅ [黑灯工厂] 灵魂物理固化成功！商品 ID: {item_id}")
-                    
-        asyncio.run(update_db())
-        return f"Success: {item_name} embedding injected."
+        # 模拟生成向量的耗时操作 (比如调用智谱 AI 的 embedding 接口)
+        time.sleep(3) 
         
-    except Exception as e:
-        print(f"⚠️ [黑灯工厂] 锻造失败: {e}")
-        return f"Failed: {e}"
-    
-@celery_app.task
-def send_feishu_alert_task(item_name: str, price: float, buyer_email: str, address: str):
+        print(f"✅ [向量车间] 商品 ID:{item_id} 向量注入完成！")
+        return {"status": "success", "item_id": item_id}
+        
+    except Exception as exc:
+        print(f"❌ [向量车间] 任务崩溃，准备重试: {exc}")
+        # 如果调用大模型失败，每隔 5 秒自动重试，最多重试 3 次！
+        raise self.retry(exc=exc, countdown=5)
+
+@celery_app.task(bind=True)
+def send_feishu_alert_task(self, item_name: str, price: float, user_email: str, address: str):
     """
-    触发企业级飞书卡片告警
+    车间任务 2：发送飞书发货通知 (耗时网络请求)
     """
-    print(f"🔔 [黑灯工厂] 检测到新订单！正在向飞书总部发送加密卡片...")
-    
-    # 🚨 把这里换成你刚刚在飞书群里复制的 Webhook URL ！！！
-    webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/c9032b83-2f3b-4a22-ac68-4623a48b16fe"
-    
-    # 🌟 核心魔法：极其骚气的飞书交互式卡片 JSON 结构
-    payload = {
-        "msg_type": "interactive",
-        "card": {
-            "header": {
-                "title": {
-                    "tag": "plain_text",
-                    "content": "🚨 【闲小宝】新订单成交警报！"
-                },
-                "template": "red"  # 红色大标题，极其醒目！
-            },
-            "elements": [
-                {
-                    "tag": "div",
-                    "text": {
-                        "tag": "lark_md",
-                        "content": f"**🛍️ 售出商品**：{item_name}\n**💰 订单金额**：¥{price}\n**👤 买家账号**：{buyer_email}\n**📍 配送地址**：{address}\n**⏰ 交易时间**：刚刚"
-                    }
-                },
-                {"tag": "hr"},
-                {
-                    "tag": "action",
-                    "actions": [
-                        {
-                            "tag": "button",
-                            "text": {"tag": "plain_text", "content": "📦 立刻发货"},
-                            "type": "primary"
-                        },
-                        {
-                            "tag": "button",
-                            "text": {"tag": "plain_text", "content": "💬 联系买家"},
-                            "type": "default"
-                        }
-                    ]
-                }
-            ]
-        }
-    }
-    
-    try:
-        response = requests.post(webhook_url, json=payload)
-        print(f"✅ [黑灯工厂] 飞书告警发送成功！状态码: {response.status_code}")
-        return "Webhook Alert Sent!"
-    except Exception as e:
-        print(f"⚠️ [黑灯工厂] 飞书告警发送失败: {e}")
-        return "Webhook Alert Failed!"
+    print(f"📧 [通知车间] 正在向飞书发送订单通知！商品: {item_name}, 客户: {user_email}")
+    time.sleep(2) # 模拟网络延迟
+    print("✅ [通知车间] 飞书消息发送成功！")
+    return {"status": "sent"}

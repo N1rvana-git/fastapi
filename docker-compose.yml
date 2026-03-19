@@ -47,7 +47,7 @@ services:
       - .env
     environment:
       # 🌟 你的 Redis 容器名是 redis_cache 还是 redis？必须和你的网络对齐！
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/fastapi_db
+      - DATABASE_URL=postgresql+asyncpg://myuser:mypassword@db:5432/mydb
       - REDIS_URL=redis://redis:6379/0  # 如果你的redis服务叫redis，就把这里改回redis
     depends_on:
       - db
