@@ -760,12 +760,39 @@ async def process_feishu_message(event_data: dict):
             print(f"✅ 身份确认：飞书用户 {sender_id} 是我们尊贵的业主：{current_user.username}")
             
             # ==========================================
-            # 🧠 在这里，你就可以放心地把 current_user 和 user_text 
-            # 传给你之前写好的智谱大模型逻辑了！
+            # 🌟 1. 飞书服务员先去档案室调取用户的历史记忆
             # ==========================================
-            # 为了测试，我们先发一句带他名字的欢迎语：
-            reply_text = f"尊贵的业主 {current_user.username} 您好！我是闲小宝，您刚才说：{user_text}\n\n(大模型已接通，正在努力思考中...)"
-            await send_feishu_message(sender_id, reply_text)
+            from sqlalchemy import select, desc # 确保能用到倒序排列
+            
+            history_query = (
+                select(models.AIChatRecord)
+                .where(models.AIChatRecord.user_id == current_user.id)
+                .order_by(desc(models.AIChatRecord.created_at))
+                .limit(6) # 拿最近的 6 条对话作为记忆
+            )
+            history_result = await db.execute(history_query)
+            history_list = history_result.scalars().all()
+            history_list.reverse() # 倒转成正常的聊天先后顺序
+            
+            print(f"📚 [飞书岗亭] 成功提取到 {len(history_list)} 条历史记忆！")
+
+            # ==========================================
+            # 🌟 2. 拿着记忆和问题，去中央厨房接菜！
+            # ==========================================
+            full_reply = ""
+            
+            # 🚨 注意看：这里把 history_list 传给了中央厨房的大厨！
+            async for chunk in posts_service.ask_ai_agent(db, current_user, user_text, history_list=history_list):
+                if chunk["type"] == "text":
+                    full_reply += chunk["content"]
+                elif chunk["type"] == "card":
+                    # 将网页端华丽的价格卡片，降维翻译成飞书能看懂的文字段落
+                    full_reply += f"\n\n📊【全网底价情报】\n商品：{chunk['item_name']}\n结论：{chunk['marketPriceSummary']}"
+            
+            print(f"✅ [飞书岗亭] 菜做好了，准备端出！回复长度：{len(full_reply)}")
+            
+            # 3. 菜全部装好，一锅端给用户！
+            await send_feishu_message(sender_id, full_reply)
 
     except Exception as e:
         print(f"❌ [后台接管] 处理飞书消息时崩溃: {e}")
