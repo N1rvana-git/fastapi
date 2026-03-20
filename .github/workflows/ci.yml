@@ -57,7 +57,7 @@ jobs:
       run: |
         pytest tests/ -v
 
-        # ==========================================
+    # ==========================================
     # 🌟 第六步：进入 CD (持续部署) 阶段！
     # ==========================================
     - name: 🔐 登录 GitHub 官方镜像车库 (GHCR)
@@ -68,6 +68,11 @@ jobs:
         username: ${{ github.actor }} 
         # 机器人使用 GitHub 自动颁发的临时通行证，不需要你填密码！
         password: ${{ secrets.GITHUB_TOKEN }} 
+        
+    - name: Convert github.repository_owner to lowercase
+      id: lowercase_owner
+      run: |
+        echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
 
     - name: 🐳 自动化构建并入库 (Build and Push)
       uses: docker/build-push-action@v4
@@ -75,4 +80,4 @@ jobs:
         context: .
         push: true # 构建完立刻推送到车库！
         # 给集装箱贴上你的专属名字，注意全部要是小写！
-        tags: ghcr.io/${{ github.repository_owner }}/xianxiaobao-fastapi:latest
+        tags: ghcr.io/${{ env.owner }}/xianxiaobao-fastapi:latest
