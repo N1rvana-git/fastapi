@@ -13,6 +13,7 @@ from . import service
 from . import models
 from .dependencies import get_db_session
 from src.auth.dependencies import get_current_user
+from src.feishu.router import send_feishu_message
 from src.database import AsyncSessionLocal
 from src.posts import service as posts_service
 import asyncio
@@ -347,7 +348,13 @@ async def buy_item(
     # 核心防御：with_for_update() 强行施加行级排他锁
     # 这意味着在当前事务 commit 或 rollback 之前，没有任何其他请求能读取这行记录
     try:
-        item = db.query(Item).filter(Item.id == item_id).with_for_update(nowait=True).first()
+        # 注意：在 asyncio 模式下 query.filter.first 是不兼容的。我们直接通过 id 和 user 锁定即可，但当前代码需要保留原有逻辑兼容
+        result = await db.execute(
+            select(models.ItemModel)
+            .where(models.ItemModel.id == item_id)
+            .with_for_update(nowait=True)
+        )
+        item = result.scalars().first()
     except OperationalError:
         # nowait=True 使得拿不到锁的请求直接抛出异常，而不是死等。这叫“熔断”。
         raise HTTPException(status_code=409, detail="当前系统拥挤，抢购失败，请重试！")
