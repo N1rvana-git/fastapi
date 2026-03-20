@@ -13,9 +13,14 @@ jobs:
     # 🌟 新增：云端 Redis 插件！让测试能连上缓存！
     services:
       redis:
-        image: redis
+        image: redis:latest
         ports:
           - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
     - name: 📥 第一步：检出代码 (Checkout)
