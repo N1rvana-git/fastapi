@@ -38,6 +38,7 @@ class UserModel(Base):
     phone = Column(String,index=True)
     hashed_password = Column(String)
     feishu_open_id = Column(String, unique=True, index=True, nullable=True)
+    role = Column(String, default="user", server_default="user", nullable=False) # 🛡️ RBAC: 用户角色 -> user 或 admin
     # 关系：反向查物品列表
     # cascade="all, delete-orphan" 表示：如果用户被删了，他的物品也会自动被删掉
     items = relationship("ItemModel", back_populates="owner", cascade="all, delete-orphan")

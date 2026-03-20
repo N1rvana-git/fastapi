@@ -39,3 +39,16 @@ async def get_current_user(
         raise credentials_exception
         
     return user
+
+async def get_current_admin_user(
+    current_user: Annotated[UserModel, Depends(get_current_user)]
+) -> UserModel:
+    """
+    管理员专属门卫：不仅需要登录（get_current_user），而且 role 必须是 admin
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The user doesn't have enough privileges",
+        )
+    return current_user

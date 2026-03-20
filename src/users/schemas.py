@@ -14,5 +14,6 @@ class UserPublic(BaseModel):#输出
     email: str
     age: Union[int,None] = None
     phone: Union[str,None] = None
+    role: str = "user"
 
     model_config = ConfigDict(from_attributes=True)
