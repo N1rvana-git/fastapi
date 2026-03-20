@@ -9,6 +9,13 @@ jobs:
   build-and-deploy:
     # 机器人的工作台：直接向 GitHub 白嫖一台最新的 Ubuntu 虚拟服务器！
     runs-on: ubuntu-latest
+    
+    # 🌟 新增：云端 Redis 插件！让测试能连上缓存！
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
 
     steps:
     - name: 📥 第一步：检出代码 (Checkout)
