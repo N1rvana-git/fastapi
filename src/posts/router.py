@@ -29,6 +29,7 @@ from pydantic import BaseModel
 from zhipuai import ZhipuAI
 from fastapi.responses import StreamingResponse
 from src.worker import inject_embedding_task,send_feishu_alert_task
+from src.auth.dependencies import get_admin_user
 from .prompts import SALES_AGENT_SYSTEM_PROMPT
 router = APIRouter(
     prefix="/items",
@@ -805,3 +806,16 @@ async def process_feishu_message(event_data: dict):
 
     except Exception as e:
         print(f"❌ [后台接管] 处理飞书消息时崩溃: {e}")
+
+# =========================================
+# 👑 管理员核禁区：测试接口
+# ==========================================
+@router.get("/admin/secret-base")
+async def get_secret_base(
+    admin_user: models.UserModel = Depends(get_admin_user)
+):
+    """只有管理员能访问的秘密基地接口"""
+    return {
+        "message": f"👑 欢迎陛下！尊贵的管理员 {admin_user.email}，这是只有您能看到的机密！",
+        "action": "您可以尽情下架任何人的商品啦！"
+    }
