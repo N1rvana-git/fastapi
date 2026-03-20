@@ -10,6 +10,10 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    # 🌟 赋予机器人往车库写数据的权限
+    permissions:
+      contents: read
+      packages: write
     # ==========================================
     # 🌟 云端临时车间：给机器人配一台免费的 Redis
     # ==========================================
@@ -52,3 +56,23 @@ jobs:
         REDIS_HOST: "localhost" # 👈 告诉我们的 FastAPI 保安，去 localhost 找 Redis！
       run: |
         pytest tests/ -v
+
+        # ==========================================
+    # 🌟 第六步：进入 CD (持续部署) 阶段！
+    # ==========================================
+    - name: 🔐 登录 GitHub 官方镜像车库 (GHCR)
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        # 机器人拿你的名字作为账号
+        username: ${{ github.actor }} 
+        # 机器人使用 GitHub 自动颁发的临时通行证，不需要你填密码！
+        password: ${{ secrets.GITHUB_TOKEN }} 
+
+    - name: 🐳 自动化构建并入库 (Build and Push)
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: true # 构建完立刻推送到车库！
+        # 给集装箱贴上你的专属名字，注意全部要是小写！
+        tags: ghcr.io/${{ github.repository_owner }}/xianxiaobao-fastapi:latest
