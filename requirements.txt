@@ -57,4 +57,5 @@ openai
 zhipuai
 pgvector
 celery
-requestsplaywright==1.42.0
+requests
+playwright==1.42.0

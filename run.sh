@@ -18,7 +18,7 @@ kill -9 $(lsof -t -i:8000) 2>/dev/null >/dev/null
 
 # 3. 启动并强制构建最新的 Docker 容器组合！
 echo "📦 温馨提示: 如果刚刚 pip 增加了新依赖，请务必保证已写入 requirements.txt 中！"
-echo "🐳 正在通过 Docker 构建并拉起核心环境 (FastAPI + PostgreSQL + Redis)..."
+echo "🐳 正在通过 Docker 构建并拉起核心环境 (FastAPI业务 + PostgreSQL持久化 + Redis缓存 + Celery异步工厂)..."
 docker compose up -d --build --remove-orphans
 
 # 4. 一劳永逸：执行数据库状态同步与补丁映射！
@@ -29,6 +29,8 @@ docker compose exec -T web alembic upgrade head
 docker compose exec -T db psql -U myuser -d mydb -c "UPDATE item SET is_sold = false WHERE is_sold IS NULL;" >/dev/null 2>&1
 
 # 5. 进入日志监听模式
-echo "👀 启动成功！一切数据完好无损！正在载入实时运行日志 (退出请按 Ctrl+C)..."
+echo "👀 启动成功！一切数据完好无损！下面是全矩阵服务的在线状态："
+docker compose ps
 echo "--------------------------------------------------------"
-docker compose logs -f web
+echo "🔥 正在双线载入 FastAPI主服务 与 Celery异步工厂 的实时日志 (退出请按 Ctrl+C)..."
+docker compose logs -f web celery_worker

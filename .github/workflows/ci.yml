@@ -26,6 +26,11 @@ jobs:
         # 顺便装一个代码语法检查工具 flake8
         pip install flake8 
 
+    - name: 🌐 附加步：安装 Playwright 浏览器
+      run: |
+        # 因为我们之前添加了爬虫库，这里需要让 GitHub Action 安装浏览器内核
+        python -m playwright install --with-deps chromium
+
     - name: 🕵️‍♂️ 第四步：全栈大侦探代码审查 (Linting)
       run: |
         # 严格检查！如果代码里有致命语法错误（比如少写括号），直接在这里熔断报错，绝不部署到生产环境！
