@@ -25,7 +25,9 @@ from src.posts.dependencies import get_db_session
 from src.posts import models
 from src.posts import service as posts_services
 router = APIRouter(prefix="/feishu", tags=["Feishu"])
-redis_client = aioredis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+import os
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+redis_client = aioredis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
 class BindFeishuRequest(BaseModel):
     open_id: str
 

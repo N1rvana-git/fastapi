@@ -35,7 +35,9 @@ router = APIRouter(
     tags=["items"]
 )
 
-redis_client = aioredis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+import os
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+redis_client = aioredis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
 # === 🌟 架构师引擎：WebSocket 全局连接池 ===
 class ConnectionManager:
     def __init__(self):
