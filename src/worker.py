@@ -43,7 +43,7 @@ def inject_embedding_task(self, item_id: int, item_name: str):
     
     try:
         # 模拟生成向量的耗时操作 (比如调用智谱 AI 的 embedding 接口)
-        time.sleep(3) 
+        time.sleep(0.1) 
         
         print(f"✅ [向量车间] 商品 ID:{item_id} 向量注入完成！")
         return {"status": "success", "item_id": item_id}

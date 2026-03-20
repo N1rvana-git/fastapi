@@ -73,8 +73,8 @@ async def test_create_and_read_item(async_client: AsyncClient):
     response_get = await async_client.get("/items/")
     assert response_get.status_code == 200
     items_list = response_get.json()
-    assert len(items_list) == 1
-    assert items_list[0]["name"] == "Test Item"
+    assert len(items_list["items"]) == 1
+    assert items_list["items"][0]["name"] == "Test Item"
 
 @pytest.mark.asyncio
 async def test_read_items_with_filter(async_client: AsyncClient):
@@ -96,14 +96,14 @@ async def test_read_items_with_filter(async_client: AsyncClient):
     # 3. 测试 is_offer_filter=True
     response_true = await async_client.get("/items/", params={"is_offer_filter": True})
     assert response_true.status_code == 200
-    assert len(response_true.json()) == 1
-    assert response_true.json()[0]["name"] == "on offer"
+    assert len(response_true.json()["items"]) == 1
+    assert response_true.json()["items"][0]["name"] == "on offer"
 
     # 4. 测试 is_offer_filter=False
     response_false = await async_client.get("/items/", params={"is_offer_filter": False})
     assert response_false.status_code == 200
-    assert len(response_false.json()) == 1
-    assert response_false.json()[0]["name"] == "not on offer"
+    assert len(response_false.json()["items"]) == 1
+    assert response_false.json()["items"][0]["name"] == "not on offer"
 
     # 5. 测试不过滤
     response_all = await async_client.get("/items/")

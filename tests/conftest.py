@@ -39,3 +39,7 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
         
     await test_engine.dispose()
     app.dependency_overrides.clear()
+@pytest.fixture(autouse=True)
+def mock_celery_eager(monkeypatch):
+    from src.worker import celery_app
+    celery_app.conf.update(task_always_eager=True)
