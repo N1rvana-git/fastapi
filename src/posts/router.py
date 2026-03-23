@@ -819,3 +819,26 @@ async def get_secret_base(
         "message": f"👑 欢迎陛下！尊贵的管理员 {admin_user.email}，这是只有您能看到的机密！",
         "action": "您可以尽情下架任何人的商品啦！"
     }
+
+# ==========================================
+# 🆕 全能注册接口 (支持买家/卖家身份选择)
+# ==========================================
+@router.post("/register/", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
+async def register_user(
+    user: schemas.UserCreate, 
+    db: AsyncSession = Depends(get_db_session)
+):
+    # 1. 🛡️ 防御检查 1：邮箱是否被占用？
+    existing_user = await service.get_user_by_email(db, user.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="手慢了，该邮箱已被注册！")
+    
+    # 2. 🛡️ 防御检查 2：防止黑客乱传角色（比如传了个 'super_hacker'）
+    if user.role not in ["user", "admin"]:
+        raise HTTPException(status_code=400, detail="非法的角色类型！只能注册为 user(买家) 或 admin(卖家)")
+
+    # 3. 🚀 放行，写入数据库！
+    new_user = await service.create_user(db, user)
+    
+    print(f"🎉 [新用户注册] 邮箱: {new_user.email}, 身份: {new_user.role}")
+    return new_user

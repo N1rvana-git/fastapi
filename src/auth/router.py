@@ -30,7 +30,10 @@ async def login_for_access_token(
     # 3. 生成 Token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = utils.create_access_token(
-        data={"sub": user.email},
+        data={
+            "sub": user.email,
+            "role": user.role
+            },
         expires_delta=access_token_expires
     )
     

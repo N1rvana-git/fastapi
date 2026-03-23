@@ -1,5 +1,5 @@
-from pydantic import Field, BaseModel, field_validator, ConfigDict
-from typing import Union, List
+from pydantic import Field, BaseModel, field_validator, ConfigDict,EmailStr
+from typing import Union, List,Optional
 
 class TagBase(BaseModel):
     name: str
@@ -71,3 +71,19 @@ class CreateItemWithUserResponse(BaseModel):
     username: Union[str, None] = None
     
     model_config = ConfigDict(from_attributes=True)
+
+# 📥 规定前端注册时必须传的数据
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    # 🌟 核心魔法：允许前端传角色！如果不传，默认就是普通买家 "user"
+    role: Optional[str] = "user" 
+
+# 📤 规定后端返回给前端的数据（绝不能把密码返回去！）
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+    
+    class Config:
+        from_attributes = True  # 允许 Pydantic 直接读取数据库对象

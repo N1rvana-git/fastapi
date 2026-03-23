@@ -63,11 +63,10 @@ async def add_trace_id_and_log(request: Request, call_next):
 app.include_router(feishu_router)
 app.add_middleware(
     CORSMiddleware,
-    # 允许访问的前端地址，注意：千万不要在网址最后加斜杠 "/"
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],  # 允许所有的请求方式 (GET, POST 等)
-    allow_headers=["*"],  # 允许所有的请求头
+    allow_origins=["*"], # 开发阶段允许所有端口跨域
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 2. 准备静态文件目录

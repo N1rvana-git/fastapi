@@ -11,7 +11,8 @@ from zhipuai import ZhipuAI
 from src.posts.scraper import search_market_price
 from src.worker import send_feishu_alert_task
 from src.posts.prompts import SALES_AGENT_SYSTEM_PROMPT
-
+from src.posts.models import UserModel
+from src.posts.schemas import UserCreate
 # 实例化大模型客户端
 ai_client = ZhipuAI(api_key="b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v")
 async def create_item(db: AsyncSession, item: schemas.ItemCreate, owner_id: int) -> models.ItemModel:
@@ -238,3 +239,22 @@ async def ask_ai_agent(db: AsyncSession, current_user: models.UserModel, user_te
     new_ai_record = models.AIChatRecord(user_id=current_user.id, role="assistant", content=full_reply_text)
     db.add(new_ai_record)
     await db.commit()
+
+"""查户口：看看这个邮箱注册过没有"""
+async def get_user_by_email(db: AsyncSession, email: str):
+    result = await db.execute(select(UserModel).where(UserModel.email == email))
+    return result.scalar_one_or_none()
+
+"""造户口：将新用户写入数据库"""
+async def create_user(db: AsyncSession, user: UserCreate):
+    hashed_password = get_password_hash(user.password)
+    db_user = UserModel(
+        email=user.email,
+        username=user.email.split("@")[0],  # 满足数据库默认字段要求
+        age=18,                             # 满足 age 非空约束
+        hashed_password=hashed_password, 
+        role=user.role)
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user

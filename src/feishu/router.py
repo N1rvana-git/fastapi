@@ -2,6 +2,14 @@ import httpx
 import json
 import asyncio
 from pydantic import BaseModel
+from typing import Any, Dict
+
+class FeishuPayload(BaseModel):
+    challenge: str | None = None
+    type: str | None = None
+    token: str | None = None
+    header: Dict[str, Any] | None = None
+    event: Dict[str, Any] | None = None
 from fastapi import APIRouter, Request, BackgroundTasks, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from zhipuai import ZhipuAI
@@ -365,7 +373,12 @@ async def process_feishu_message(event_data: dict):
 # 📡 网关：飞书事件接收器 (保持不变)
 # ==========================================
 @router.post("/webhook")
-async def feishu_webhook(request: Request, background_tasks: BackgroundTasks):
+async def feishu_webhook(request: Request, background_tasks: BackgroundTasks, payload_data: FeishuPayload = None):
+    """
+    飞书 Webhook 接收端
+    - 用于接收飞书的各种事件推送（包含首次URL验证的 challenge）
+    - 测试时请在请求体输入类似： {"challenge": "xxx", "type": "url_verification"}
+    """
     try:
         payload = await request.json()
         print(f"🔥 RAW PAYLOAD: {payload}")

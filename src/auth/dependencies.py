@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.posts.dependencies import get_db_session
 from src.users.service import get_user_by_email
+from src.posts import models
 from src.posts.models import UserModel
 from .schemas import TokenData
 
@@ -51,4 +52,23 @@ async def get_current_admin_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The user doesn't have enough privileges",
         )
+    return current_user
+
+#超级管理员专属安检门
+async def get_admin_user(current_user: models.UserModel = Depends(get_current_user)):
+    """
+    大厂级 RBAC 核心：
+    这个函数会先自动调用 get_current_user 检查是否登录。
+    如果登录了，再检查他的角色是不是 admin。
+    """
+    # 扫描手环芯片里的角色...
+    if current_user.role != "admin":
+        print(f"🚨 [警报] 普通用户 {current_user.email} 试图硬闯管理员禁区！已被拦截！")
+        # 403 Forbidden 是 HTTP 协议里专门用来表示“身份没问题，但权限不够”的状态码
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="🛑 皇家禁卫军拦截：您是普通买家，没有权限使用此接口！"
+        )
+    
+    # 只有金手环才能走到这一步！
     return current_user
