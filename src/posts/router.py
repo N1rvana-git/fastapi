@@ -823,7 +823,7 @@ async def get_secret_base(
 # ==========================================
 # 🆕 全能注册接口 (支持买家/卖家身份选择)
 # ==========================================
-@router.post("/register/", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
     user: schemas.UserCreate, 
     db: AsyncSession = Depends(get_db_session)

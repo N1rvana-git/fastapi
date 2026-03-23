@@ -11,6 +11,7 @@ from src.config import settings
 from health.router import router as health_router
 from src.users.router import router as users_router
 from src.auth.router import router as auth_router
+from src.feishu.router import router as feishu_router
 
 # ==========================================
 # 🔦 探照灯配置：设定大厂标准的日志格式
@@ -24,17 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-from src.feishu.router import router as feishu_router
-app = FastAPI(title="我的全栈二手平台")  # 或者 title=settings.APP_NAME
-from patch import add_exception_handler
-add_exception_handler(app)
-from patch import add_exception_handler
-add_exception_handler(app)
 app = FastAPI(title="我的全栈二手平台")
-from patch import add_exception_handler
-add_exception_handler(app)
-from patch import add_exception_handler
-add_exception_handler(app)
 
 # ==========================================
 # 🛡️ 一楼安检大厅：全局日志中间件
