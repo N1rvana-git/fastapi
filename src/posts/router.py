@@ -342,16 +342,14 @@ async def toggle_favorite(
     return {"message": action_msg}
 
 #新增核心交易链路：安全下单接口 (带防超卖悲观锁)
-@router.post("/items/{item_id}/buy")
+@router.post("/{item_id}/buy")
 async def buy_item(
     item_id: int,
     db: AsyncSession = Depends(get_db_session),
     current_user: models.UserModel = Depends(get_current_user)
 ):
-    # 核心防御：with_for_update() 强行施加行级排他锁
-    # 这意味着在当前事务 commit 或 rollback 之前，没有任何其他请求能读取这行记录
+    # 1. 核心防御：with_for_update() 强行施加行级排他锁
     try:
-        # 注意：在 asyncio 模式下 query.filter.first 是不兼容的。我们直接通过 id 和 user 锁定即可，但当前代码需要保留原有逻辑兼容
         result = await db.execute(
             select(models.ItemModel)
             .where(models.ItemModel.id == item_id)
@@ -362,21 +360,43 @@ async def buy_item(
         # nowait=True 使得拿不到锁的请求直接抛出异常，而不是死等。这叫“熔断”。
         raise HTTPException(status_code=409, detail="当前系统拥挤，抢购失败，请重试！")
 
+    # 2. 各种前置校验
     if not item:
         raise HTTPException(status_code=404, detail="该物品已在物理位面上消失。")
     if not item.is_offer:
         raise HTTPException(status_code=400, detail="求购贴拒绝执行抢购逻辑。")
-    if item.is_sold:
-        raise HTTPException(status_code=400, detail="晚了一步，商品已被截胡。")
+    if item.is_sold or item.inventory <= 0:
+        raise HTTPException(status_code=400, detail="晚了一步，商品已售罄。")
 
-    # 只有拿到唯一排他锁的那个线程，才能走到这里
-    item.is_sold = True
+    # 3. 🌟 修复库存逻辑：精准扣减
+    item.inventory -= 1
+    
+    # 只有当库存真的被扣到 0 的时候，才打上售罄标签！
+    if item.inventory == 0:
+        item.is_sold = True
+    
+    # 为了兼容之前的单品逻辑，保留 buyer_id
     item.buyer_id = current_user.id
+
+    # 4. 🌟 修复订单逻辑：生成真实的交易流水 (OrderModel)
+    # 这样你的 Dashboard 里的“最新订单记录”才会真正长出数据！
+    new_order = models.OrderModel(
+        item_id=item.id,
+        buyer_id=current_user.id,
+        status="paid"  # 假设直接付款成功
+    )
+    db.add(new_order)
     
-    # 事务提交，释放行锁
-    db.commit()
+    # 5. 提交事务，释放行锁
+    await db.commit()
     
-    return {"message": "抢购成功！订单已锁定。"}
+    # ==========================================
+    # 🚀 [可选扩展] 触发异步飞书通知（后台发送，不阻塞前端抢购）
+    # 如果你想让卖家瞬间收到爆单通知，可以解开这行注释：
+    # send_feishu_alert_task.delay(f"🎉 爆单啦！您发布的商品【{item.name}】刚刚被买走了一件！剩余库存：{item.inventory}")
+    # ==========================================
+    
+    return {"message": f"抢购成功！订单已锁定，该商品还剩 {item.inventory} 件库存。"}
 
 ai_client = ZhipuAI(
     api_key = "b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v"
@@ -619,31 +639,22 @@ async def agent_with_tools(
                     # 1. 安全扣减库存
                     if real_item.inventory > 0:
                         real_item.inventory -= 1
-                        
-                    # 只有库存真正归零时，才将状态锁死为售罄
-                    if real_item.inventory == 0:
-                        real_item.is_sold = True
-                    
-                    
-                    try:
-                        # 🌟 架构师修复：先 flush 将改动推到数据库但不提交事务
+
+                        # 确保库存扣减后持久化
                         await db.flush()
-                        
-                        # 把消息投递给 Celery（如果有异常会直接在这里抛出）
-                        send_feishu_alert_task.delay(real_item.name, real_item.price, current_user.email, address)
-                        
-                        # 确保投递成功后，再彻底提交数据库！
-                        await db.commit()
-                        
-                        success_msg = f"\n\n🎉 搞定啦老板！您的【{real_item.name}】已经为您下单，我们马上安排发往：**{address}**！"
-                        full_reply_text += success_msg
-                        yield f"data: {json.dumps({'content': success_msg})}\n\n"
-                    except Exception as e:
-                        print(f"❌ [订单异常] {e}")
-                        await db.rollback()
-                        err_msg = "\n\n抱歉老板，系统刚打了个冷颤，订单没能写入成功，钱没扣，请稍后再试！"
-                        full_reply_text += err_msg
-                        yield f"data: {json.dumps({'content': err_msg})}\n\n"
+
+                        # 只有库存真正归零时，才将状态锁死为售罄
+                        if real_item.inventory == 0:
+                            real_item.is_sold = True
+                            await db.flush()
+
+                    # 提交事务，确保所有改动生效
+                    await db.commit()
+                    
+                    success_msg = f"\n\n🎉 搞定啦老板！您的【{real_item.name}】已经为您下单，我们马上安排发往：**{address}**！"
+                    full_reply_text += success_msg
+                    yield f"data: {json.dumps({'content': success_msg})}\n\n"
+                await db.commit()
         elif tool_call_name == "search_web_price":
             print(f"⚡ [Function Calling] AI 想要全网比价！参数: {tool_call_args}")
             args = json.loads(tool_call_args)

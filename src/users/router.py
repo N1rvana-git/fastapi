@@ -24,7 +24,7 @@ async def get_all_users_admin(
     result = await db.execute(select(UserModel))
     return result.scalars().all()
 
-@router.post("/", response_model=schemas.UserPublic)
+@router.post("/register", response_model=schemas.UserPublic)
 async def register_user(
         user_in: schemas.UserCreate,#调用pydantic模型进行验证注册
         db: AsyncSession = Depends(get_db_session)
