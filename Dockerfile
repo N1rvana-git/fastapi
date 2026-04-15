@@ -8,7 +8,10 @@ WORKDIR /app
 COPY requirements.txt .
 
 # 4. 安装依赖：让集装箱里的系统照着清单安装包 (加 --no-cache-dir 可以减小集装箱体积)
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install uv && uv pip install --system --no-cache-dir -r requirements.txt
+
+# 4.1 安装 Playwright Chromium 及其系统依赖，避免运行期缺少浏览器可执行文件
+RUN playwright install --with-deps chromium
 
 # 5. 复制项目代码：把本地文件夹里的所有东西，统统搬进集装箱的 /app 目录下
 # (不用担心把垃圾文件搬进去，因为我们刚才写了 .dockerignore)

@@ -54,7 +54,8 @@ async def add_trace_id_and_log(request: Request, call_next):
 app.include_router(feishu_router)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 开发阶段允许所有端口跨域
+    allow_origins=["http://localhost:5173"], # 开发阶段允许指定的源或用正则匹配所有
+    allow_origin_regex=".*",                 # 动态匹配任何来源 (解决带有 credential 的跨域 '*')
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
