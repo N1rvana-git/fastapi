@@ -29,8 +29,7 @@ from fastapi.responses import StreamingResponse
 from src.worker import inject_embedding_task,send_feishu_alert_task
 from src.auth.dependencies import get_admin_user
 from .prompts import SALES_AGENT_SYSTEM_PROMPT
-from src.posts.agent_graph import graph
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+# agent_graph 与 langchain_core.messages 为可选依赖，按需在 handler 内部导入以避免启动失败
 from src.posts.ai_vision import get_image_embedding,get_text_embedding
 router = APIRouter(
     prefix="/items",
@@ -506,6 +505,28 @@ async def agent_with_tools(
         "绝对不能把找商品和查规则的工具用混了！"
     )
 
+    # 按需导入依赖：LangGraph 与消息类型。若不可用则降级处理（返回错误消息）。
+    try:
+        from src.posts.agent_graph import graph as _graph
+    except Exception as e:
+        _graph = None
+        print(f"agent_graph not available: {e}")
+
+    try:
+        from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+    except Exception:
+        class SystemMessage:
+            def __init__(self, content):
+                self.content = content
+
+        class HumanMessage:
+            def __init__(self, content):
+                self.content = content
+
+        class AIMessage:
+            def __init__(self, content):
+                self.content = content
+
     messages = [SystemMessage(content=system_prompt)]
 
     max_context_messages = 6
@@ -544,7 +565,12 @@ async def agent_with_tools(
             stop_tokens = ["\n", "。", "！", "!", "？", "?"]
             recent_window = ""
 
-            async for msg, metadata in graph.astream(
+            if _graph is None:
+                yield f"data: {json.dumps({'content': 'Agent 功能不可用：依赖缺失'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            async for msg, metadata in _graph.astream(
                 {"messages": messages},
                 stream_mode="messages"
             ):
