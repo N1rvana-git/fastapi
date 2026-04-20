@@ -31,7 +31,7 @@ from src.auth.dependencies import get_admin_user
 from .prompts import SALES_AGENT_SYSTEM_PROMPT
 from src.posts.agent_graph import graph
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from src.posts.ai_vision import get_image_embedding
+from src.posts.ai_vision import get_image_embedding,get_text_embedding
 router = APIRouter(
     prefix="/items",
     tags=["items"]
@@ -760,3 +760,99 @@ async def register_user(
     
     print(f"🎉 [新用户注册] 邮箱: {new_user.email}, 身份: {new_user.role}")
     return new_user
+
+@router.post("/items/search-by-image")
+async def search_items_by_image(
+    file: UploadFile = File(...), 
+    db: AsyncSession = Depends(get_db_session)
+):
+    """通过图片搜索商品的接口（简化实现）：
+    - 使用 `get_image_embedding` 提取查询向量
+    - 从数据库加载带有 `image_embedding` 的商品
+    - 在 Python 端计算余弦相似度并返回 top-N
+    适用于小数据集；若数据量大请改成 DB 端向量检索（pgvector）。
+    """
+    image_bytes = await file.read()
+    try:
+        query_vector = get_image_embedding(image_bytes)
+        print(f"📊 [AI 视觉] 成功提取图片特征向量，长度: {len(query_vector)}")
+    except Exception as e:
+        print(f"🚨 [AI 视觉] 图片特征提取失败: {e}")
+        raise HTTPException(status_code=500, detail=f"图片处理失败: {str(e)}")
+
+    # 从数据库异步读取包含 embedding 的商品
+    result = await db.execute(select(models.ItemModel).where(models.ItemModel.image_embedding != None))
+    items = result.scalars().all()
+
+    if not items:
+        return {"message": "检索成功", "data": []}
+
+    # 在 Python 端计算余弦相似度（小规模可行）
+    import numpy as _np
+    def _cosine(a, b):
+        a = _np.array(a, dtype=float)
+        b = _np.array(b, dtype=float)
+        denom = (_np.linalg.norm(a) * _np.linalg.norm(b)) + 1e-10
+        return float(_np.dot(a, b) / denom)
+
+    scored = []
+    for item in items:
+        emb = getattr(item, "image_embedding", None)
+        if emb is None:
+            continue
+        try:
+            score = _cosine(query_vector, emb)
+        except Exception:
+            score = -1.0
+        scored.append((score, item))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top = scored[:5]
+    data = [
+        {
+            "id": it.id,
+            "name": it.name,
+            "price": it.price,
+            "is_offer": it.is_offer,
+            "is_sold": it.is_sold,
+            "image_path": it.image_path,
+        }
+        for _, it in top
+    ]
+
+    return {"message": "检索成功", "data": data}
+
+class TextSearchRequest(BaseModel):
+    query_text: str
+@router.post("/items/search-by-text")
+async def search_items_by_text(
+    request: TextSearchRequest,
+    db: Session = Depends(get_db)
+):
+    """🔤 跨模态引擎：用自然语言搜图"""
+    # 1. 把买家输入的文字变成 512 维向量
+    try:
+        text_vector = get_text_embedding(request.query_text)
+    except Exception as e:
+        return {"error": f"文字解析失败: {str(e)}"}
+
+    # 2. 🌟 架构师的魔法：数据库级余弦距离检索！
+    similar_items = (
+        db.query(ItemModel)
+        .filter(ItemModel.image_embedding.is_not(None)) # 过滤掉没有文本描述的商品
+        .order_by(ItemModel.image_embedding.cosine_distance(query_vector)) # 按语义相似度排序
+        .limit(5) # 只取最像的前 5 个
+        .all()
+    )
+    # 3. 整理结果返回给前端
+    results = []
+    for item in similar_items:
+        results.append({
+            "id": item.id,
+            "name": item.name,
+            "price": item.price,
+            "is_offer": item.is_offer,
+            "is_sold": item.is_sold,
+            "image_path": item.image_path
+        })
+    return {"message": f"为您找到与 '{request.query_text}' 在视觉上最匹配的商品", "data": results}
