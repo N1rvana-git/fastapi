@@ -1,7 +1,38 @@
 from typing import Annotated, TypedDict
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode, tools_condition
+import logging
+
+# 尝试导入 langgraph；若缺失则降级为轻量 stub，避免启动时报错
+try:
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.graph.message import add_messages
+    from langgraph.prebuilt import ToolNode, tools_condition
+    LANGGRAPH_AVAILABLE = True
+except Exception as _e:
+    logging.getLogger(__name__).warning("langgraph not available: %s", _e)
+    LANGGRAPH_AVAILABLE = False
+
+    def add_messages(x):
+        return x
+
+    class ToolNode:
+        def __init__(self, tools=None):
+            pass
+
+    def tools_condition(*args, **kwargs):
+        return False
+
+    class StateGraph:
+        def __init__(self, *args, **kwargs):
+            pass
+        def add_node(self, *args, **kwargs):
+            pass
+        def add_edge(self, *args, **kwargs):
+            pass
+        def add_conditional_edges(self, *args, **kwargs):
+            pass
+        def compile(self):
+            return None
+
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage
 
