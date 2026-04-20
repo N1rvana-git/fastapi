@@ -14,6 +14,10 @@ except Exception as _e:
     def add_messages(x):
         return x
 
+    # 定义占位常量，避免后续引用报错
+    START = "START"
+    END = "END"
+
     class ToolNode:
         def __init__(self, tools=None):
             pass
@@ -33,8 +37,32 @@ except Exception as _e:
         def compile(self):
             return None
 
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import AIMessage
+try:
+    from langchain_openai import ChatOpenAI
+    LANGCHAIN_OPENAI_AVAILABLE = True
+except Exception as _e:
+    logging.getLogger(__name__).warning("langchain_openai not available: %s", _e)
+    LANGCHAIN_OPENAI_AVAILABLE = False
+    class ChatOpenAI:
+        def __init__(self, *args, **kwargs):
+            pass
+        def bind_tools(self, tools):
+            return self
+        async def ainvoke(self, messages):
+            # 返回一个简单的降级回复对象
+            try:
+                return AIMessage(content="抱歉，AI 服务（langchain_openai）未安装，功能已降级。") 
+            except NameError:
+                class AIMessageFallback:
+                    def __init__(self, content): self.content = content
+                return AIMessageFallback("抱歉，AI 服务（langchain_openai）未安装，功能已降级。")
+
+try:
+    from langchain_core.messages import AIMessage
+except Exception as _e:
+    logging.getLogger(__name__).warning("langchain_core.messages not available: %s", _e)
+    class AIMessage:
+        def __init__(self, content): self.content = content
 
 # 引入本地工具
 from src.posts.agent_tools import create_order_tool, search_platform_products_tool, search_platform_policy_tool, search_web_price_tool
