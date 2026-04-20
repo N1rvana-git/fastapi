@@ -46,3 +46,9 @@ htmlcov/
 # User uploads
 uploads/
 static/images/
+# ignore test images and temp files generated during local testing
+/test_images
+/src/posts/test_images
+temp.json
+*.pyc
+__pycache__/

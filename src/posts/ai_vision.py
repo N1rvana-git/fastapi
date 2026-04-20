@@ -26,6 +26,10 @@ def get_image_embedding(image_bytes: bytes) -> list[float]:
     inputs = processor(images=image, return_tensors="pt").to(device)
     with torch.no_grad():
         image_features = model.get_image_features(**inputs)
+        if hasattr(image_features, "pooler_output"):
+            image_features = image_features.pooler_output
+        elif hasattr(image_features, "last_hidden_state"):
+            image_features = image_features.last_hidden_state[:, 0, :]
     
     # 🌟 架构师细节：特征归一化 (L2 Norm)，能让后面的余弦相似度计算极度精准！
     image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
@@ -36,6 +40,10 @@ def get_text_embedding(text: str) -> list[float]:
     inputs = processor(text=[text], padding=True, return_tensors="pt").to(device)
     with torch.no_grad():
         text_features = model.get_text_features(**inputs)
+        if hasattr(text_features, "pooler_output"):
+            text_features = text_features.pooler_output
+        elif hasattr(text_features, "last_hidden_state"):
+            text_features = text_features.last_hidden_state[:, 0, :]
         
     text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
     return text_features.squeeze().cpu().tolist()

@@ -113,7 +113,8 @@ import io
 
 @router.post("/upload-image/")
 async def upload_image(
-    file: UploadFile = File(...)
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
 ):
     image_bytes = await file.read()
     try:
