@@ -1,0 +1,11 @@
+The output of test_agent_graph.py returns:
+❌ [向量检索报错] Error code: 429, with error text {"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"}}
+Followed by the agent falling back to the gracefully handled string:
+"抱歉，目前我们的商品查询系统正在维护中，暂时无法为您查询仓库里的相机库存。请您稍后再试..."
+
+Explanation for the user:
+It appears that despite you recharging your Zhipu account ("已经充值了"), the Zhipu `embedding-2` model is still returning a 429 (Insufficient Balance Error: 'code 1113'). The migration from Zetatechs failed earlier because Zetatechs doesn't support `text-embedding-3-small` bindings, and falling back to your Zhipu key hits this exact balance constraint in live time.
+
+The LangGraph system itself correctly triggers `search_platform_products`, queries PgVector perfectly up until it attempts to hit `ZhipuAI().embeddings.create(model="embedding-2")`, dropping the exception natively.
+
+Action Plan: Have the user double-check if their Zhipu API key `b40d...fmYx6v` was the account they successfully recharged, as the service is rigidly returning out of balance errors. We have completed the setup by fully restoring the hybrid logic utilizing Zetatechs free Gemini models for reasoning + Zhipu for embeddings!

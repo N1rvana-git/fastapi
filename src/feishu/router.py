@@ -12,7 +12,10 @@ class FeishuPayload(BaseModel):
     event: Dict[str, Any] | None = None
 from fastapi import APIRouter, Request, BackgroundTasks, HTTPException, Depends
 from fastapi.responses import JSONResponse
+from openai import OpenAI, AsyncOpenAI
 from zhipuai import ZhipuAI
+from src.config import settings
+from src.llm_policy import get_chat_base_url, get_chat_model, get_embedding_model, get_proxy_api_key
 import redis.asyncio as aioredis
 from sqlalchemy import select, desc, delete
 from src.posts.prompts import SALES_AGENT_SYSTEM_PROMPT
@@ -27,11 +30,13 @@ from src.worker import send_feishu_alert_task
 
 # 引入数据库工厂和 user service
 from src.database import AsyncSessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.posts import service as posts_service 
 from src.auth.dependencies import get_current_user
 from src.posts.dependencies import get_db_session
 from src.posts import models
 from src.posts import service as posts_services
+from src.config import settings
 router = APIRouter(prefix="/feishu", tags=["Feishu"])
 import os
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
@@ -45,7 +50,7 @@ class BindFeishuRequest(BaseModel):
 @router.post("/bind")
 async def bind_feishu_account(
     request: BindFeishuRequest,
-    db: AsyncSessionLocal = Depends(get_db_session), 
+    db: AsyncSession = Depends(get_db_session), 
     current_user: models.UserModel = Depends(get_current_user)):
     print(f"🔗 [绑定登记处] 用户 {current_user.username} 请求绑定飞书账号 {request.open_id}")
 
@@ -61,11 +66,11 @@ async def bind_feishu_account(
     print(f"✅ [绑定登记处] 用户 {current_user.username} 成功绑定飞书账号 {request.open_id}")
 
 # ==========================================
-# 🔐 飞书应用配置 (请替换为你自己的真实数据)
+# 🔐 飞书应用配置（统一走环境变量）
 # ==========================================
-FEISHU_VERIFICATION_TOKEN = "B0Nfx7Vc3kJ8656yvICRjhZu1dWePdMV"  # 👈 填入你的 Verification Token
-FEISHU_APP_ID = "cli_a93906ec7dfa1bc0"
-FEISHU_APP_SECRET = "Oaytk9gpKydsabBmPod0Tb7XMcMlUfde"
+FEISHU_VERIFICATION_TOKEN = settings.FEISHU_VERIFICATION_TOKEN
+FEISHU_APP_ID = settings.FEISHU_APP_ID
+FEISHU_APP_SECRET = settings.FEISHU_APP_SECRET
 
 
 # ==========================================
@@ -102,7 +107,9 @@ async def send_feishu_message(open_id: str, text: str):
 # ==========================================
 # 🧠 核心：后台处理大脑
 # ==========================================
-ai_client = ZhipuAI(api_key="b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v")
+async_chat_client = AsyncOpenAI(api_key=get_proxy_api_key(), base_url=get_chat_base_url())
+chat_client = OpenAI(api_key=get_proxy_api_key(), base_url=get_chat_base_url())
+zhipu_client = ZhipuAI(api_key=settings.ZHIPUAI_API_KEY)
 
 async def process_feishu_message(event_data: dict):
     try:
@@ -207,8 +214,8 @@ async def process_feishu_message(event_data: dict):
             print(f"🔫 [向量检索] 融合语境搜索词: '{search_query}'")
             try:
                 embed_response = await asyncio.to_thread(
-                    ai_client.embeddings.create,
-                    model="embedding-2", 
+                    zhipu_client.embeddings.create,
+                    model=get_embedding_model(),
                     input=search_query
                 )
                 query_vector = embed_response.data[0].embedding
@@ -293,8 +300,8 @@ async def process_feishu_message(event_data: dict):
 
             print("🤖 [Agent] 正在思考...")
             response = await asyncio.to_thread(
-                ai_client.chat.completions.create,
-                model="glm-4.5-flash",
+                chat_client.chat.completions.create,
+                model=get_chat_model(),
                 messages=messages,
                 tools=tools,
             )
@@ -346,8 +353,8 @@ async def process_feishu_message(event_data: dict):
                         market_data = await search_market_price(item_name)
                         summary_prompt = f"请用一两句话简短总结以下搜到的价格情报，告诉用户外面的价格是多少，并说一句我们平台的价格更香：\n{market_data}"
                         summary_response = await asyncio.to_thread(
-                            ai_client.chat.completions.create,
-                            model="glm-4.5-flash",
+                            chat_client.chat.completions.create,
+                            model=get_chat_model(),
                             messages=[{"role": "user", "content": summary_prompt}],
                             temperature=0.3
                         )

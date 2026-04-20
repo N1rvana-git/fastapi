@@ -58,7 +58,9 @@ celery
 requests
 playwright
 email-validator
-langchain-core
-langgraph
+langchain-core==0.2.43
+langgraph==0.2.35
+langchain-text-splitters
 
-langchain_zhipu
+langchain_zhipu==4.1.8
+langchain-openai

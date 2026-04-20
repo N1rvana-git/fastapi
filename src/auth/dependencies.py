@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -13,6 +13,7 @@ from .schemas import TokenData
 
 # 这一行告诉 FastAPI：客户端应该去哪里找 Token (login 接口的 URL)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
@@ -39,6 +40,27 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
         
+    return user
+
+
+async def get_current_user_optional(
+    token: Annotated[Optional[str], Depends(oauth2_scheme_optional)],
+    db: AsyncSession = Depends(get_db_session),
+) -> Optional[UserModel]:
+    """可选鉴权：token 缺失或无效时返回 None，不抛 401。"""
+    if not token:
+        return None
+
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        token_data = TokenData(username=username)
+    except JWTError:
+        return None
+
+    user = await get_user_by_email(db, email=token_data.username)
     return user
 
 async def get_current_admin_user(

@@ -7,14 +7,19 @@ from . import schemas
 from . import models
 from .utils import get_password_hash
 import json
+from openai import OpenAI, AsyncOpenAI
 from zhipuai import ZhipuAI
+from src.config import settings
+from src.llm_policy import get_chat_base_url, get_chat_model, get_embedding_model, get_proxy_api_key
 from src.posts.scraper import search_market_price
 from src.worker import send_feishu_alert_task
 from src.posts.prompts import SALES_AGENT_SYSTEM_PROMPT
 from src.posts.models import UserModel
 from src.posts.schemas import UserCreate
 # 实例化大模型客户端
-ai_client = ZhipuAI(api_key="b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v")
+chat_client = OpenAI(api_key=get_proxy_api_key(), base_url=get_chat_base_url())
+async_chat_client = AsyncOpenAI(api_key=get_proxy_api_key(), base_url=get_chat_base_url())
+zhipu_client = ZhipuAI(api_key=settings.ZHIPUAI_API_KEY)
 async def create_item(db: AsyncSession, item: schemas.ItemCreate, owner_id: int) -> models.ItemModel:
     """创建物品，自动关联owner_id"""
     item_data = item.model_dump(exclude={"tag_ids"})  # 先排除标签 ID，后面单独处理
@@ -147,7 +152,7 @@ async def ask_ai_agent(db: AsyncSession, current_user: models.UserModel, user_te
 
     print(f"🔫 [中央厨房] 正在为您检索库存: '{search_query}'")
     try:
-        embed_response = ai_client.embeddings.create(model="embedding-2", input=search_query)
+        embed_response = zhipu_client.embeddings.create(model=get_embedding_model(), input=search_query)
         query_vector = embed_response.data[0].embedding
 
         query = select(models.ItemModel).where(models.ItemModel.is_offer == True).where(models.ItemModel.inventory > 0).where(models.ItemModel.embedding.is_not(None)).order_by(models.ItemModel.embedding.cosine_distance(query_vector)).limit(3)
@@ -194,8 +199,8 @@ async def ask_ai_agent(db: AsyncSession, current_user: models.UserModel, user_te
 
     # 4. 🧠 开启大模型思考流水线
     print("🤖 [中央厨房] 开启水龙头！向云端大脑发送请求...")
-    response = ai_client.chat.completions.create(
-        model="glm-4-flash", # 或 glm-4.5-flash
+    response = chat_client.chat.completions.create(
+        model=get_chat_model(),
         messages=messages,
         tools=tools,
         stream=True  
@@ -224,8 +229,8 @@ async def ask_ai_agent(db: AsyncSession, current_user: models.UserModel, user_te
         yield {"type": "text", "content": f"\n\n🕸️ 正在启动量子爬虫，潜入全网为您搜索 **{item_name}** 的底价..."}
         market_data = await search_market_price(item_name)
         
-        summary_response = ai_client.chat.completions.create(
-            model="glm-4-flash",
+        summary_response = chat_client.chat.completions.create(
+            model=get_chat_model(),
             messages=[{"role": "user", "content": f"简短总结以下价格情报：\n{market_data}"}],
             temperature=0.3
         )

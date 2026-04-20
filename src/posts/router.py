@@ -1,4 +1,3 @@
-from .scraper import search_market_price
 import os
 import asyncio
 import shutil
@@ -12,7 +11,7 @@ from . import schemas
 from . import service
 from . import models
 from .dependencies import get_db_session
-from src.auth.dependencies import get_current_user
+from src.auth.dependencies import get_current_user, get_current_user_optional
 from src.feishu.router import send_feishu_message
 from src.database import AsyncSessionLocal
 from src.posts import service as posts_service
@@ -26,7 +25,6 @@ from .storage import current_storage
 from .dependencies import get_db_session
 from openai import AsyncOpenAI
 from pydantic import BaseModel
-from zhipuai import ZhipuAI
 from fastapi.responses import StreamingResponse
 from src.worker import inject_embedding_task,send_feishu_alert_task
 from src.auth.dependencies import get_admin_user
@@ -400,9 +398,6 @@ async def buy_item(
     
     return {"message": f"抢购成功！订单已锁定，该商品还剩 {item.inventory} 件库存。"}
 
-ai_client = ZhipuAI(
-    api_key = "b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v"
-)
 #支持上下文的pydantic模型
 class Message(BaseModel):
     role: str = "user"
@@ -422,9 +417,13 @@ async def get_ai_history(
     skip: int = 0,
     limit: int = 20,
     db: AsyncSession = Depends(get_db_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """获取 AI 聊天历史接口 (支持分页)"""
+    if current_user is None:
+        # 前端首次加载/Token 失效时，平滑返回空历史，避免401刷屏
+        return []
+
     # 直接查询数据库，where 已经保证了数据隔离，不需要画蛇添足的 if 判断
     query = (
         select(models.AIChatRecord)
@@ -484,6 +483,11 @@ async def agent_with_tools(
         "你叫闲小宝，是二手交易平台的金牌导购兼客服。"
         "你的职责是：帮用户找商品、全网比价、帮用户下单。"
         "当用户找商品时，必须调用 search_platform_products 工具查询真实库存，禁止编造。"
+        "禁止输出任何内部执行过程、工具调用状态、系统节点信息或思考过程。"
+        "禁止出现如 [LangGraph]、正在思考、工具触发、爬虫启动、请稍候 等过程话术。"
+        "问规则（如退换货/防骗）必须调用 search_platform_policy 工具去翻阅知识库。"
+        "当你需要了解当前市场外面的价格，或者用户问了非平台内的问题时，请【主动使用你的自带联网搜索技能 (web_search)】，去全网收集最新信息后回答用户！"
+        "绝对不能把找商品和查规则的工具用混了！"
     )
 
     messages = [SystemMessage(content=system_prompt)]
@@ -507,6 +511,22 @@ async def agent_with_tools(
         try:
             print("🤖 [Agent 核心] 开启 LangGraph 流式请求...")
             full_reply_text = ""
+            suppress_internal_line = False
+
+            hidden_markers = [
+                "[langgraph]",
+                "正在启动量子爬虫",
+                "量子爬虫",
+                "全网比价，请稍候",
+                "请稍候",
+                "正在思考",
+                "tool 触发",
+                "工具触发",
+                "节点",
+                "内部执行",
+            ]
+            stop_tokens = ["\n", "。", "！", "!", "？", "?"]
+            recent_window = ""
 
             async for msg, metadata in graph.astream(
                 {"messages": messages},
@@ -519,12 +539,9 @@ async def agent_with_tools(
                     if tool_name == "search_platform_products":
                         # 对平台库存检索工具保持静默，不向前端暴露内部执行提示
                         pass
-                    elif tool_name == "search_web_prices":
-                        resp = {"content": "\n\n🕸️ [LangGraph] 正在启动量子爬虫进行全网比价，请稍候..."}
-                        yield f"data: {json.dumps(resp)}\n\n"
                     elif tool_name == "create_order":
-                        resp = {"content": "\n\n📦 [LangGraph] 正在为您查验库存并生成订单..."}
-                        yield f"data: {json.dumps(resp)}\n\n"
+                        # 对下单工具保持静默，避免暴露内部执行过程
+                        pass
                     continue
 
                 # 只把 chatbot 节点产出的 AI 文本推给前端，避免 system/human/tool 消息泄露
@@ -544,6 +561,19 @@ async def agent_with_tools(
                     text = str(content or "")
 
                 if text:
+                    lowered = text.lower()
+                    mixed_window = (recent_window + lowered)[-240:]
+
+                    if suppress_internal_line or any(marker in mixed_window for marker in hidden_markers):
+                        if any(token in text for token in stop_tokens):
+                            suppress_internal_line = False
+                        else:
+                            suppress_internal_line = True
+                        recent_window = mixed_window[-120:]
+                        continue
+
+                    recent_window = mixed_window[-120:]
+
                     full_reply_text += text
                     yield f"data: {json.dumps({'content': text})}\n\n"
 

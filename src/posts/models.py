@@ -1,7 +1,7 @@
 #区分“数据库表模型”（内部结构）和“API 模式”（外部合同）。
 #定义数据表
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Table, Text, DateTime
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, mapped_column
 from sqlalchemy.sql import func
 from src.database import Base
 from pgvector.sqlalchemy import Vector
@@ -24,10 +24,8 @@ class ItemModel(Base):
     tags = relationship("item_TagModel", secondary="item_tag", back_populates="items", lazy="selectin")
     inventory = Column(Integer, default=1, server_default='1', nullable=False)  # 新增：库存数量
     is_sold = Column(Boolean, default=False)  # 新增：是否已售出
-    inventory = Column(Integer, default=1, server_default='1', nullable=False) # 🌟 新增库存字段
-    inventory = Column(Integer, default=1, server_default='1', nullable=False) # 🌟 新增库存字段
 
-    embedding = Column(Vector(1024))  # 新增：商品描述的向量表示
+    embedding = Column(Vector(1024))  # Zhipu embedding-2 使用 1024 维
 
 class UserModel(Base):
     __tablename__ = "users"#把 Python 类映射成 PostgreSQL 表
@@ -79,3 +77,13 @@ class OrderModel(Base):
     # 建立 ORM 关系映射，方便我们写 Python 代码时直接一点就能获取到商品和买家信息
     buyer = relationship("UserModel")
     item = relationship("ItemModel")
+
+# ==========================================
+# 🌟 企业级知识库：非结构化文本切片表
+# ==========================================
+class KnowledgeModel(Base):
+    __tablename__ = "knowledge_base"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    content = Column(Text)
+    embedding = mapped_column(Vector(1024))  # 存储文本切片的向量表示，方便后续的语义检索

@@ -1,4 +1,5 @@
 import json
+import asyncio
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 from src.posts.scraper import search_market_price
@@ -6,27 +7,32 @@ from src.database import AsyncSessionLocal
 from src.posts import models
 from sqlalchemy import select
 from zhipuai import ZhipuAI
+
+from src.posts.models import KnowledgeModel
+from src.config import settings
+from src.llm_policy import get_embedding_model
+
+zhipu_client = ZhipuAI(api_key=settings.ZHIPUAI_API_KEY)
 # ==========================================
 # 技能 1：全网比价工具 (带严格的数据校验)
 # ==========================================
-class WebPriceQuery(BaseModel):
-    item_name: str = Field(..., description="要查询的商品名称")
+class WebPriceInput(BaseModel):
+    item_name: str = Field(description="要购买或查询的商品名称")
 
-@tool("search_web_prices", return_direct=True)
+@tool("search_web_price", args_schema=WebPriceInput)
 async def search_web_price_tool(item_name: str) -> str:
     """
-    🚨【极度危险】当且仅当用户明确要求查看【外部市场价】、【全网比价】、【别人卖多少钱】时才允许调用！
-    如果用户只是询问本平台有什么商品，绝对、绝对禁止调用此工具！
+    🚨【全网搜索工具】当用户要求“全网比价”、“外面卖多少钱”时调用。
+    该工具将启动无头浏览器（Playwright）前往全网抓取真实的市场价格。
     """
-    print(f"⚡ [Tool 触发] 正在全网搜索: {item_name}")
+    print(f"🕸️ [Playwright 启动] 正在深入暗网抓取 {item_name} 的底价...")
     try:
-        # 直接调用你之前写好的爬虫函数
+        # 直接调用你极其强大的 Playwright 爬虫！
         market_data = await search_market_price(item_name)
         
-        # 返回给大模型一段纯文本，让大模型自己去总结
-        return f"全网搜索结果如下：\n{market_data}\n请用一两句话简短总结，并告诉用户我们平台的价格更香。"
+        return f"Playwright 抓取到的全网真实数据如下：\n{market_data}\n请用一两句话简短总结，并突出我们平台的价格优势。"
     except Exception as e:
-        return f"全网搜索失败，请告诉用户系统网络波动：{str(e)}"
+        return f"浏览器抓取失败：{str(e)}"
 
 # ==========================================
 # 技能 2：下单扣减库存工具
@@ -78,7 +84,7 @@ async def create_order_tool(item_id: int, item_name: str, address: str) -> str:
             ensure_ascii=False
         )
 
-ai_client = ZhipuAI(api_key="b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v")
+
 # ==========================================
 # 技能 3：平台库存检索引擎 (企业级 RAG 工具)
 # ==========================================
@@ -92,34 +98,78 @@ async def search_platform_products_tool(query: str) -> str:
     该工具会通过 AI 向量数据库（pgvector）在平台的真实库存中进行语义检索。
     """
     print(f"⚡ [Tool 触发] 正在检索平台数据库，搜索词: '{query}'")
-    
     try:
-        # 1. 将用户的意图转化为 1024 维度的浮点数向量
-        embed_response = ai_client.embeddings.create(model="embedding-2", input=query)
+        embed_response = await asyncio.to_thread(
+            zhipu_client.embeddings.create,
+            model=get_embedding_model(),
+            input=query,
+        )
         query_vector = embed_response.data[0].embedding
+    except Exception as e:
+        return f"商品向量检索失败：{e}"
 
-        async with AsyncSessionLocal() as db:
-        # 2. 极其优雅的高维空间余弦距离搜索 (Cosine Distance)
-            sql_query = (
+    async with AsyncSessionLocal() as db:
+        vector_query = (
+            select(models.ItemModel)
+            .where(models.ItemModel.is_offer == True)
+            .where(models.ItemModel.inventory > 0)
+            .where(models.ItemModel.embedding.is_not(None))
+            .order_by(models.ItemModel.embedding.cosine_distance(query_vector))
+            .limit(5)
+        )
+        result = await db.execute(vector_query)
+        items = list(result.scalars().all())
+
+        if not items:
+            fallback_query = (
                 select(models.ItemModel)
                 .where(models.ItemModel.is_offer == True)
                 .where(models.ItemModel.inventory > 0)
-                .where(models.ItemModel.embedding.is_not(None))
-                .order_by(models.ItemModel.embedding.cosine_distance(query_vector))
-                .limit(4) # 只拿最相关的 4 个，绝不浪费 Token
+                .limit(5)
             )
-            result = await db.execute(sql_query)
-            items = result.scalars().all()
-            
-            # 3. 应对查不到的情况
-            if not items:
-                return "很抱歉，仓库里目前没有找到符合该描述的在售商品。"
-            
-            # 4. 组装成极简的结构化文本，喂给大模型
-            db_data_str = "、".join([f"ID:{item.id}-{item.name}(价格:￥{item.price}, 剩余:{item.inventory}件)" for item in items])
-            
-            return f"我已经查到了以下平台真实在售商品，请参考这些数据向用户热情推荐：\n{db_data_str}"
-            
+            items = list((await db.execute(fallback_query)).scalars().all())
+
+    if not items:
+        return "当前没有可推荐的在售商品。"
+
+    lines = [f"ID:{item.id} | {item.name} | 价格:￥{item.price} | 库存:{item.inventory}" for item in items]
+    return "平台推荐商品如下：\n" + "\n".join(lines)
+
+# ==========================================
+# 技能 4：企业知识库翻书引擎 (RAG 核心)
+# ==========================================
+class SearchKnowledgeInput(BaseModel):
+    query: str = Field(description="用户询问的规则、防骗、退换货、纠纷等具体问题")
+
+@tool("search_platform_policy", args_schema=SearchKnowledgeInput)
+async def search_platform_policy_tool(query: str) -> str:
+    """
+    🚨【必杀技能】当且仅当用户询问关于：退货、换货、防骗、运费、平台规则、客服介入等【政策/规则类】问题时，必须调用此工具！
+    千万不要用查商品的工具去查规则！
+    """
+    print(f"📖 [翻书引擎触发] 正在知识库中检索规则: '{query}'")
+    try:
+        embed_response = await asyncio.to_thread(
+            zhipu_client.embeddings.create,
+            model=get_embedding_model(),
+            input=query,
+        )
+        query_vector = embed_response.data[0].embedding
     except Exception as e:
-        print(f"❌ [向量检索报错] {e}")
-        return "数据库检索暂时不可用，请告诉用户系统正在维护。"
+        return f"知识库向量检索失败：{e}"
+
+    async with AsyncSessionLocal() as db:
+        vector_query = (
+            select(KnowledgeModel)
+            .where(KnowledgeModel.embedding.is_not(None))
+            .order_by(KnowledgeModel.embedding.cosine_distance(query_vector))
+            .limit(3)
+        )
+        result = await db.execute(vector_query)
+        docs = list(result.scalars().all())
+
+    if not docs:
+        return "知识库暂无可用规则，请稍后再试。"
+
+    snippets = [f"- {doc.content[:180]}" for doc in docs]
+    return "匹配到的平台规则：\n" + "\n".join(snippets)

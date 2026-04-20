@@ -6,7 +6,7 @@ from sqlalchemy import select, update
 from src.posts.models import ItemModel
 from src.config import settings
 
-ai_client = ZhipuAI(api_key="b40d93bc3d5748dd9fd47efdc32d0f0c.nhsV68wYizfmYx6v")
+ai_client = ZhipuAI(api_key=settings.ZHIPUAI_API_KEY)
 
 async def main():
     engine = create_async_engine(settings.DATABASE_URL, echo=True)
