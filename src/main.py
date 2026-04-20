@@ -6,7 +6,12 @@ import os
 import time
 import uuid
 import logging
-from src.posts.router import router as posts_router
+try:
+    from src.posts.router import router as posts_router
+except Exception as _e:
+    import logging as _logging
+    _logging.getLogger(__name__).warning("posts router import failed, skipping posts routes: %s", _e)
+    posts_router = None
 from src.config import settings
 from health.router import router as health_router
 from src.users.router import router as users_router
@@ -79,7 +84,8 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 # 4. 注册路由
 app.include_router(health_router)
 app.include_router(auth_router)
-app.include_router(posts_router) # posts_router 内部已经定义了 prefix="/items"，所以这里不需要再加
+if posts_router is not None:
+    app.include_router(posts_router) # posts_router 内部已经定义了 prefix="/items"，所以这里不需要再加
 app.include_router(users_router)
 
 @app.get("/")
