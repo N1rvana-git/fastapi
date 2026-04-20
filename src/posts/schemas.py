@@ -18,6 +18,7 @@ class ItemBase(BaseModel):
     is_offer: Union[bool, None] = None
     image_path: Union[str, None] = None  # 新增图片路径字段
     inventory: int = Field(default=1, ge=0, description="库存数量")
+    image_embedding: Union[List[float], None] = None # 用于承接刚才生成的图片特征向 量
     
 
 # 专门用于"创建"的模型

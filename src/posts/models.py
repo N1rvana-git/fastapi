@@ -26,6 +26,7 @@ class ItemModel(Base):
     is_sold = Column(Boolean, default=False)  # 新增：是否已售出
 
     embedding = Column(Vector(1024))  # Zhipu embedding-2 使用 1024 维
+    image_embedding = mapped_column(Vector(512), nullable=True)  # 🌟 [新增！] 专门用于“以图搜图”的 512 维视觉向量特征！
 
 class UserModel(Base):
     __tablename__ = "users"#把 Python 类映射成 PostgreSQL 表
@@ -87,3 +88,5 @@ class KnowledgeModel(Base):
     title = Column(String, nullable=False)
     content = Column(Text)
     embedding = mapped_column(Vector(1024))  # 存储文本切片的向量表示，方便后续的语义检索
+# 🌟 [新增！] 专门用于“以图搜图”的 512 维视觉向量特征！
+    image_embedding = mapped_column(Vector(512), nullable=True)

@@ -31,6 +31,7 @@ from src.auth.dependencies import get_admin_user
 from .prompts import SALES_AGENT_SYSTEM_PROMPT
 from src.posts.agent_graph import graph
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from src.posts.ai_vision import get_image_embedding
 router = APIRouter(
     prefix="/items",
     tags=["items"]
@@ -108,11 +109,25 @@ async def process_image_in_background(filename: str):
     await asyncio.sleep(5)  # 模拟处理时间
     print(f"✅ [后台任务完成] 图片处理完成：{filename}")
 
+from src.posts.ai_vision import get_image_embedding
+import io
+
 @router.post("/upload-image/")
 async def upload_image(
-    file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = BackgroundTasks  # 注意不要带括号
+    file: UploadFile = File(...)
 ):
+    image_bytes = await file.read()
+    try:
+        # ai_vision.py 中的 get_image_embedding 是普通同步函数，不要用 await
+        img_vector = get_image_embedding(image_bytes)
+        print(f"📊 [AI 视觉] 成功提取图片特征向量，长度: {len(img_vector)}")
+    except Exception as e:
+        print(f"🚨 [AI 视觉] 图片特征提取失败: {e}")
+        img_vector = None
+
+    # 让 subsequent current_storage.upload(file) 可以起作用
+    file.file.seek(0)
+    
     """专门的图片上传接口 (现在通过统一 Storage 策略处理)"""
     
     # 🌟 核心：把文件直接丢给大管家，不用管它是存本地还是存云端！
@@ -124,7 +139,8 @@ async def upload_image(
     return {
         "filename": file.filename, 
         "url": image_url,  # 🌟 直接返回管家给的网址
-        "message": "图片上传成功，正在后台处理..."
+        "image_embedding": img_vector, # 返回前台并在发布商品时携带
+        "message": "图片上传成功，特征提取完成！"
     }
 @router.get("/")
 async def read_items_from_db(
