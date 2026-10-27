@@ -24,12 +24,15 @@ MANIFEST
 # Virtual Environment
 venv/
 .venv/
+.venv-*/
 env/
 ENV/
 
 # Database
 *.db
 *.sqlite3
+*.sql
+backup.sql
 
 # Env vars
 .env
@@ -46,6 +49,15 @@ htmlcov/
 # User uploads
 uploads/
 static/images/
+*.jpg
+*.jpeg
+*.png
+
+# Local tooling, logs, and generated artifacts
+archive_logs/
+cloudflared
+*.log
+File Upload
 # ignore test images and temp files generated during local testing
 /test_images
 /src/posts/test_images
