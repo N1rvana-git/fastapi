@@ -24,5 +24,6 @@ PyJWT>=2.8,<3.0
 passlib>=1.7.4,<2.0
 bcrypt>=3.2,<5.0
 python-multipart>=0.0.9
+cryptography>=42,<47
 pgvector>=0.2.5,<1.0
 numpy>=1.26,<3.0

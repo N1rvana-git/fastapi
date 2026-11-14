@@ -7,6 +7,7 @@ Feishu webhook, the agent tools and a CLI.
 
 from __future__ import annotations
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.core.exceptions import ConflictError, NotFoundError, UnauthorizedError
@@ -45,7 +46,13 @@ async def register_user(
         role=role,
     )
     session.add(user)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        # The unique index on lower(email) is the final guard against two
+        # replicas racing the same registration.
+        await session.rollback()
+        raise ConflictError("该邮箱已被注册", details={"email": email}) from exc
     await session.refresh(user)
     logger.info("user registered", extra={"ctx_user_id": user.id, "ctx_role": user.role})
     return user

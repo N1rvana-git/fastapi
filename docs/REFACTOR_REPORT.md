@@ -16,7 +16,7 @@
 模块化单体 + 严格分层 + 全链路异步 + 纯 ASGI 中间件 + lifespan 资源治理 + 领域异常 + 幂等/限流 +
 可降级基础设施 + Redis Stream 任务队列与 SSE 缓冲 + HITL 审批 + 结构化日志/探针 + 质量门禁。
 
-结果：90 个测试全绿；`alembic upgrade/downgrade` 双向通过（含 SQLite）；真实 uvicorn 冒烟通过；
+结果：108 个测试全绿；`alembic upgrade/downgrade` 双向通过（含 SQLite）；真实 uvicorn 冒烟通过；
 文档化改造点与差距。
 
 ---
@@ -82,8 +82,8 @@
 
 | 项目 | 命令 | 结果 |
 | --- | --- | --- |
-| 单元 + 集成测试 | `pytest tests -q` | **90 passed**（约 15s；SQLite 内存库、无 Redis、无外部网络） |
-| 覆盖率 | `pytest --cov=src/app` | **约 67%**（CI 门禁 60%） |
+| 单元 + 集成测试 | `pytest tests -q` | **108 passed**（约 100s；SQLite 内存库、无 Redis、无外部网络） |
+| 覆盖率 | `pytest --cov=src/app` | **约 68%**（CI 门禁 60%） |
 | Lint | `ruff check src tests` | **All checks passed**（0 告警） |
 | 格式 | `ruff format --check src tests` | 92 files already formatted |
 | 类型检查 | `mypy src/app` | **Success: no issues found in 72 source files** |
@@ -111,7 +111,7 @@
 | --- | --- | --- |
 | 最大单文件行数 | 932（posts/router.py） | ~374（items/router.py，且只做 HTTP 编排） |
 | 导入应用耗时 | 受 600MB 模型下载/加载支配 | 毫秒级（模型懒加载） |
-| 自动化测试 | 名义存在、实际失效 | 90 个，覆盖核心链路与并发/幂等/审批 |
+| 自动化测试 | 名义存在、实际失效 | 108 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密 |
 | 交易链路 | 必然 500 | 可下单、可重复请求重放、防超卖 |
 | 收藏功能 | 必然 500 | 可用（新增关联表） |
 | 权限提升 | 匿名可注册 admin | 默认禁止，管理员 API 才能改角色 |
@@ -122,12 +122,14 @@
 
 ## 6. 未完成与风险（面试时主动说）
 
-1. 覆盖率约 67%，距核心模块 80% 目标仍有差距（下一步补 SSE/网关/视觉降级路径的测试）。
+1. 覆盖率约 68%，距核心模块 80% 目标仍有差距（下一步补 SSE/网关/视觉降级路径的测试）。
 2. HITL 用业务库审批表代替 LangGraph checkpointer：语义等价但**没有**多步图快照回溯；
    未来接入 LangGraph 时保留审批表作为事实来源。
 3. 无 Redis 时幂等/限流/锁退化为进程内，多副本场景必须 Redis（`REDIS_REQUIRED=true`）。
-4. `users.email` 无数据库唯一约束（历史数据可能重复），由 service 保证。
-5. 飞书只校验 verification token，未做 encrypt-key 签名校验；生产需补。
+4. `users.email` 已由迁移 `d4b7e2a9c1f0` 加 `lower(email)` 唯一索引（重复邮箱自动归档为 `+dup<id>`）；
+   历史数据仍需人工确认归档账号的归属。
+5. 飞书已支持 `FEISHU_ENCRYPT_KEY`：签名校验 + AES 解密 + 时间戳新鲜度；未配置该密钥时仍只校验
+   verification token（向后兼容，生产必须配置）。
 6. 未做压测与混沌演练；`LLM_MAX_CONCURRENCY` 等参数需要按真实上游 QPS 调。
 
 ---
@@ -146,9 +148,9 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 4. 然后做**协作型能力**：Redis Stream 事件缓冲 + Last-Event-ID 续传 + 会话锁 + 三层背压 +
    人工审批状态机（金额超阈值挂起、幂等恢复、超时清理）；
 5. 最后做**工程闭环**：lifespan 资源治理、纯 ASGI 中间件、JSON 日志 + trace_id、双探针、
-   alembic 双向迁移、Docker/compose/CI/pre-commit、90 个测试。
+   alembic 双向迁移、Docker/compose/CI/pre-commit、108 个测试。
 
-**Result**：90 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
+**Result**：108 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
 防超卖"；新增能力（幂等、限流、SSE 续传、HITL）都有对应测试与文档。
 
 **可能的追问**：
@@ -162,7 +164,7 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 
 ## 8. 下一步 30/60/90
 
-- **30 天**：覆盖率从 67% 提到核心模块 80%；补 `pip-audit`/Dependabot；补 SSE/网关/降级路径测试；
+- **30 天**：覆盖率从 68% 提到核心模块 80%；补 `pip-audit`/Dependabot；补 SSE/网关/降级路径测试；
 - **60 天**：接入 OpenTelemetry + Prometheus/Grafana 面板与分级告警；压测出 P95/P99；
   飞书签名校验；`email` 唯一索引（先清洗数据）；
 - **90 天**：多副本故障演练（Redis/DB/LLM 故障注入）；按需接入 LangGraph/Temporal 处理复杂长流程；
@@ -188,5 +190,21 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 - 删除了 `API_KEy` 拼写别名（`API_KEY` 仍兼容），消除 Ruff SIM112，并同步测试与文档；
 - `_pdf_extract.txt`、`mypy_before.txt` 等临时产物已清理。
 
-复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 90 passed、
-覆盖率约 67%、干净 SQLite 迁移 up/down 通过。
+复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 108 passed、
+覆盖率约 68%、干净 SQLite 迁移 up/down 通过。
+
+---
+
+## 10. 0.2.2 安全加固（方向 2）
+
+对应 REFACTOR_REPORT §6 遗留风险中的两条，以及兼容层清理：
+
+| 项 | 实现 | 验证 |
+| --- | --- | --- |
+| 邮箱唯一性下沉到数据库 | 迁移 `d4b7e2a9c1f0`：重复邮箱归档为 `<email>+dup<id>`（保留最早账号），再建 `lower(email)` 部分唯一索引 | SQLite 迁移测试（含 seed 重复数据与 downgrade）；真实 PG 上索引生效，`SELLER@example.com` 插入被拒 |
+| 飞书事件防伪造 | `FEISHU_ENCRYPT_KEY` + `FeishuCrypto`：`X-Lark-Signature` 校验（SHA-256 + 5 分钟时间戳新鲜度）、AES-256-CBC 解密（`sha256(key)` + 前 16 字节 IV + PKCS#7） | 7 个单元测试（签名/篡改/过期/解密/未配置）+ 6 个 HTTP 边界测试（未签名 403、加密 challenge、篡改 403、无 key 拒绝密文） |
+| 兼容 shim 清理 | 删除无引用的 `src/config.py`、`src/database.py`、`src/llm_policy.py` | `grep` 无引用；导入与测试全绿 |
+
+新增测试：`tests/integration/test_migrations.py`（真实 Alembic 子进程）、
+`tests/unit/test_feishu_security.py`、`tests/integration/test_feishu_encrypted.py`、
+`tests/integration/test_auth_users.py::test_email_uniqueness_is_enforced_by_the_database`。

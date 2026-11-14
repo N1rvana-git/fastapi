@@ -330,7 +330,9 @@ PDF §3 使用 `AsyncPostgresSaver` + 独立 psycopg3 连接池 + `interrupt()`�
 - [x] 上传：uuid 文件名（杜绝路径穿越）、目录按前缀/哈希分片、静态目录只读挂载；
 - [x] CORS：生产必须显式白名单（启动校验）；凭据 + 白名单；
 - [x] 安全响应头；请求体大小限制；
-- [x] Webhook：常量时间比较 verification token；
+- [x] Webhook：常量时间比较 verification token；配置 `FEISHU_ENCRYPT_KEY` 后强制
+      `X-Lark-Signature` 校验（含 5 分钟时间戳新鲜度）+ AES-256-CBC 解密；
+- [x] 邮箱唯一性由数据库保证：`lower(email)` 部分唯一索引（迁移 `d4b7e2a9c1f0`）；
 - [x] 日志：不打印密钥/密码；连接串脱敏；
 - [x] 依赖：`pip check`/CI 可加 `pip-audit`（未启用，见差距）。
 
@@ -342,7 +344,7 @@ PDF §3 使用 `AsyncPostgresSaver` + 独立 psycopg3 连接池 + `interrupt()`�
 | `structlog` | 未使用 | 依赖未引入；自研 JSON formatter 覆盖相同能力，缺 `bind()` 链式 API |
 | OpenTelemetry 链路追踪 | 未接入 | 无 SDK；保留 `trace_id` 上下文与中间件挂载点，接入成本低 |
 | `mypy` 严格配置全绿 | 已达成（0.2.1） | `mypy src/app` → 0 errors，CI 已移除 `continue-on-error` |
-| 覆盖率 ≥80%（核心模块） | 未达成 | 当前约 67%；CI 门禁 60%，逐步提升 |
+| 覆盖率 ≥80%（核心模块） | 未达成 | 当前约 68%；CI 门禁 60%，逐步提升 |
 | Granian / uvloop | 未启用 | 镜像默认 uvicorn；Granian 是可选替换（见 RUNBOOK） |
 | Temporal / Taskiq | 未引入 | 自研 Redis Stream 队列满足当前规模；复杂长流程再引入 |
 | LangGraph checkpointer | 未接入 | 见 §6.4；0.2.x 计划接入（双池 + interrupt/resume） |
@@ -360,7 +362,7 @@ PDF §3 使用 `AsyncPostgresSaver` + 独立 psycopg3 连接池 + `interrupt()`�
 | 架构设计合理性 | 4 | 模块化单体、单向依赖、组合根、领域异常 | 用 `import-linter` 把分层规则变成 CI 门禁 |
 | 性能与可扩展性 | 4 | 全异步、连接池、两级缓存、原子 UPDATE、SSE 背压 | 压测（locust/k6）出 P95；大列表引入 keyset 分页 |
 | 服务治理与稳定性 | 3 | 限流/超时/重试/退避、会话锁、审批超时、优雅停机 | 熔断器（半开/关闭）与降级开关；多副本演练 |
-| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、90 测试、uv.lock、迁移双向 | 覆盖率 80%、依赖审计 |
+| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、108 测试、uv.lock、迁移双向 | 覆盖率 80%、依赖审计 |
 | 可观测性 | 3 | JSON 日志 + trace_id + 双探针 + 可选指标 | 接入 OTel/Prometheus + Grafana 面板与分级告警 |
 | 安全与合规 | 4 | JWT/密码/RBAC/上传/CORS/错误脱敏 | `pip-audit`、限流分级、敏感字段脱敏展示 |
 | 业务适配与演进能力 | 4 | 新增域只需加目录；任务/工具/审批即插即用 | 写 ADR、补 API 契约测试（Schemathesis） |
@@ -392,5 +394,6 @@ PDF §3 使用 `AsyncPostgresSaver` + 独立 psycopg3 连接池 + `interrupt()`�
 - `users.email` 的唯一性由 service 校验（历史库可能有重复），未加数据库唯一约束；
   高并发注册存在极小概率重复，建议先清洗数据再加唯一索引。
 - 视觉模型首次加载仍需下载权重（懒加载，首次请求变慢）；建议构建镜像时预热或挂载缓存卷。
-- 飞书事件未做签名校验（仅 verification token 校验）；生产建议增加 encrypt key 解密与签名验证。
+- 飞书未配置 `FEISHU_ENCRYPT_KEY` 时只做 verification token 校验（向后兼容）；生产必须配置，
+  否则拿到 webhook URL 的人可以伪造事件。
 - API 无版本前缀（`API_PREFIX` 可配置）；对外公开前建议设为 `/api/v1`。

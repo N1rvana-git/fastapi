@@ -37,6 +37,7 @@
 [ ] DATABASE_URL 为 postgresql+asyncpg:// 且已启用 pgvector 扩展
 [ ] redis 可达；REDIS_REQUIRED=true（多副本时必须有 Redis）
 [ ] CORS_ORIGINS 为真实前端域名，CORS_ALLOW_ALL_IN_DEV=false
+[ ] 飞书：FEISHU_VERIFICATION_TOKEN 与 FEISHU_ENCRYPT_KEY 均已配置（否则无法校验签名）
 [ ] IDEMPOTENCY_HEADER_REQUIRED=true（前端已发送 X-Idempotency-Key）
 [ ] LOG_FORMAT=json，日志已接入采集（Loki/ELK）
 [ ] /health/live 与 /health/ready 探针已配置且路径正确

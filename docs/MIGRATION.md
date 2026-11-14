@@ -27,10 +27,10 @@ rm -f tests/test_analyze_upload.py            # 未跟踪的占位文件
 git commit -m "refactor: modular monolith architecture (0.2.0)"
 ```
 
-> `src/config.py` / `src/database.py` / `src/llm_policy.py` 已被替换为**兼容 shim**，
-> 旧脚本仍可 import；确定无人使用后再 `git rm`。
+> `src/config.py` / `src/database.py` / `src/llm_policy.py` 三个兼容 shim 已在本轮删除；
+> 新代码请使用 `src.app.core.config` 与 `src.app.core.database`（模型白名单校验也在 Settings 中）。
 > `src/posts` / `src/auth` / `src/users` / `src/feishu` / `health` 的 `__init__.py`
-> 现在是守卫：import 会抛出带迁移指引的 `ImportError`。执行上面的 `git rm` 后自然消失。
+> 是守卫：import 会抛出带迁移指引的 `ImportError`。执行上面的 `git rm` 后自然消失。
 > 你自己的学习笔记（`FastApi-practice.md`、`FastAPI项目重读笔记.md`）不属于代码，
 > 是否保留由你决定。
 
@@ -113,6 +113,7 @@ git commit -m "refactor: modular monolith architecture (0.2.0)"
 | `ai_chat_records` | `+ thread_id`（回填 `'u{user_id}:main'`）, `+ user_id/thread_id` 索引 |
 | `agent_approvals` | **新表**（HITL 队列，唯一幂等键 + 过期时间） |
 | `knowledge_base` | `+ created_at` |
+| `users` | 迁移 `d4b7e2a9c1f0`：重复邮箱归档为 `<email>+dup<id>`，并建立 `lower(email)` 部分唯一索引 |
 
 执行：
 
@@ -148,6 +149,7 @@ alembic downgrade -1          # 回到 c924f1debfb5
 | `AGENT_DISCONNECT_POLICY` | `continue`（默认，跑完落库）或 `abort`（立即省 token） |
 | `IDEMPOTENCY_HEADER_REQUIRED` | 生产建议 `true`：写接口强制带幂等键 |
 | `CHAT_API_KEY` | LLM key；旧的 `API_KEY` 仍兼容（`API_KEy` 拼写别名已在 0.2.1 移除） |
+| `FEISHU_ENCRYPT_KEY` | 飞书 Encrypt Key；配置后强制签名校验 + AES 解密，未配置则只校验 verification token |
 | `VISION_ENABLED` | 不需要以图搜图时设 `false`，省掉模型加载 |
 | `UPLOAD_DIR` | 上传目录（可为绝对路径） |
 
@@ -189,7 +191,7 @@ alembic downgrade -1          # 回到 c924f1debfb5
 ## 7. 未来工作（与本文档相邻）
 
 - 生成并提交 `uv.lock`（本机离线无法生成）；
-- 覆盖率从 60% 门槛逐步提高到核心模块 80%（当前约 67%）；
+- 覆盖率从 60% 门槛逐步提高到核心模块 80%（当前约 68%）；
 - 接入 OpenTelemetry（保留 `trace_id` 上下文即可低成本挂载）；
 - 如需完整 LangGraph 状态机：安装 `langgraph` + `langgraph-checkpoint-postgres`，
   实现 `AgentRuntime` 协议，并在 lifespan 中按"双池隔离"建 checkpointer 连接池。

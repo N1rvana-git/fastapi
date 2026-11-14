@@ -63,6 +63,7 @@ class AppContainer:
     chat_service: ChatService = field(init=False)
     tool_deps: ToolDeps = field(init=False)
     feishu_service: Any = field(init=False)
+    feishu_crypto: Any = field(init=False)
     started_at: float = field(default_factory=time.monotonic)
     _cleanup_task: asyncio.Task[Any] | None = field(default=None, init=False)
     _started: bool = field(default=False, init=False)
@@ -81,6 +82,9 @@ class AppContainer:
         container.storage = build_storage(settings)
         container.token_service = TokenService(settings)
         container.llm = LLMGateway(settings, container.http)
+        from src.app.modules.feishu.security import FeishuCrypto
+
+        container.feishu_crypto = FeishuCrypto(settings.FEISHU_ENCRYPT_KEY)
         container.tool_deps = ToolDeps(
             settings=settings,
             database=container.database,

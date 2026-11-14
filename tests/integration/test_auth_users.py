@@ -58,6 +58,36 @@ async def test_public_registration_cannot_escalate_to_admin(client: AsyncClient)
 
 
 @pytest.mark.asyncio
+async def test_email_uniqueness_is_enforced_by_the_database(
+    client: AsyncClient, started_app, auth_headers: dict[str, str]
+) -> None:
+    """The service check can race; the partial unique index must not."""
+
+    from sqlalchemy.exc import IntegrityError
+    from src.app.modules.users.models import UserModel
+
+    case_variant = await client.post(
+        "/users/register",
+        json={"email": "USER@example.com", "password": "Password123"},
+    )
+    assert case_variant.status_code == 409
+
+    async with started_app.state.container.database.session() as session:
+        session.add(
+            UserModel(
+                email="user@example.com",
+                username="dupe",
+                age=18,
+                hashed_password="x",
+                role="user",
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await session.commit()
+        await session.rollback()
+
+
+@pytest.mark.asyncio
 async def test_protected_endpoint_requires_token(client: AsyncClient) -> None:
     assert (await client.get("/auth/me")).status_code == 401
     assert (await client.get("/items")).status_code == 200  # public listing

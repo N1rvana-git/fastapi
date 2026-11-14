@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import DateTime, Index, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.app.core.database import Base
@@ -61,3 +61,15 @@ class UserModel(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"<UserModel id={self.id} email={self.email!r} role={self.role!r}>"
+
+
+# Case-insensitive uniqueness, enforced by the database rather than a service
+# check (two replicas can otherwise both pass a "SELECT then INSERT" race).
+# The partial predicate lets legacy/SSO accounts live without an e-mail.
+Index(
+    "users_email_lower_key",
+    func.lower(UserModel.email),
+    unique=True,
+    postgresql_where=text("email IS NOT NULL"),
+    sqlite_where=text("email IS NOT NULL"),
+)

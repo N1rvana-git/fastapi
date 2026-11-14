@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -35,22 +34,39 @@ async def bind_feishu_account(
 
 @router.post("/webhook", summary="Feishu event subscription endpoint")
 async def feishu_webhook(request: Request) -> Any:
-    try:
-        payload: dict[str, Any] = await request.json()
-    except (json.JSONDecodeError, ValueError):
-        return JSONResponse(content={"error": "invalid json"}, status_code=400)
+    # The raw bytes are required: the signature is computed over them, and the
+    # body may be AES-encrypted (``{"encrypt": "..."}``).
+    raw = await request.body()
+    crypto = request.app.state.container.feishu_crypto
+    if crypto.configured and not crypto.verify(
+        timestamp=request.headers.get("X-Lark-Request-Timestamp", ""),
+        nonce=request.headers.get("X-Lark-Request-Nonce", ""),
+        body=raw,
+        signature=request.headers.get("X-Lark-Signature", ""),
+    ):
+        logger.warning("feishu webhook rejected: bad signature or stale timestamp")
+        return JSONResponse(content={"error": "forbidden"}, status_code=403)
 
-    # URL verification handshake (Feishu sends challenge before any event).
+    try:
+        payload: dict[str, Any] = crypto.decode(raw)
+    except PermissionError as exc:
+        logger.error("feishu webhook rejected: %s", exc)
+        return JSONResponse(content={"error": "forbidden"}, status_code=403)
+    except ValueError as exc:
+        logger.warning("feishu webhook rejected: %s", exc)
+        return JSONResponse(content={"error": "invalid payload"}, status_code=400)
+
+    # URL verification handshake (Feishu sends the challenge before any event).
     if payload.get("type") == "url_verification" or "challenge" in payload:
         return {"challenge": payload.get("challenge")}
 
     settings = request.app.state.settings
-    token = payload.get("token") or (payload.get("header") or {}).get("token")
+    header = payload.get("header") or {}
+    token = payload.get("token") or header.get("token")
     if not verify_shared_secret(settings.FEISHU_VERIFICATION_TOKEN, token):
         logger.warning("feishu webhook rejected: bad verification token")
         return JSONResponse(content={"error": "forbidden"}, status_code=403)
 
-    header = payload.get("header") or {}
     if header.get("event_type") != "im.message.receive_v1":
         return {"msg": "ignored"}
 

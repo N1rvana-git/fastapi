@@ -40,6 +40,7 @@
 | 14 | HITL 通过并下单 | `POST .../resume {"approved":true}` | ✅ 订单 #2，库存 1→0，`is_sold=true`，审批 `resolved_order_id=2` |
 | 15 | 重复审批 | 再次 `resume` | ✅ 409，未重复扣库存 |
 | 16 | pgvector 语义检索 | 写入 1024 维向量后 `cosine_distance` 排序 | ✅ 相似向量排第一（1.0），正交向量 0.031 |
+| 17 | 邮箱唯一索引（方向 2） | `alembic upgrade head` → `d4b7e2a9c1f0`，插入 `SELLER@example.com` | ✅ 索引 `users_email_lower_key` 生效，大小写重复被 PG 拒绝 |
 
 数据库侧的最终状态（摘要）：
 

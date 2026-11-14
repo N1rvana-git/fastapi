@@ -131,6 +131,7 @@ class Settings(BaseSettings):
 
     # -------------------------------------------------------------- feishu
     FEISHU_VERIFICATION_TOKEN: str = ""
+    FEISHU_ENCRYPT_KEY: str = ""
     FEISHU_APP_ID: str = ""
     FEISHU_APP_SECRET: str = ""
     FEISHU_BASE_URL: str = "https://open.feishu.cn/open-apis"
