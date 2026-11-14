@@ -107,7 +107,7 @@ class EmbeddingClient:
             call,
             attempts=self.settings.LLM_MAX_RETRIES,
             base_delay=self.settings.LLM_RETRY_BASE_DELAY,
-            retry_on=_RETRYABLE + (DependencyUnavailableError,),
+            retry_on=(*_RETRYABLE, DependencyUnavailableError),
             on_retry=lambda attempt, exc, delay: logger.warning(
                 "embedding retry %s after %s: %s", attempt, round(delay, 2), exc
             ),

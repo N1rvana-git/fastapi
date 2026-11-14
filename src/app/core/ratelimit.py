@@ -49,7 +49,7 @@ class InMemoryRateLimiter:
                 count, reset_at = 0, now + window_seconds
             count += 1
             self._data[key] = (count, reset_at)
-            reset_after = max(0, int(round(reset_at - now)))
+            reset_after = max(0, round(reset_at - now))
             allowed = count <= limit
             return RateLimitResult(
                 allowed=allowed,

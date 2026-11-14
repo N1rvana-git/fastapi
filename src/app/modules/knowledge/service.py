@@ -21,12 +21,16 @@ async def search_policy(
     if not cleaned:
         return [], "empty"
 
-    if embeddings is not None and getattr(embeddings, "enabled", False):
-        if session.bind is not None and session.bind.dialect.name == "postgresql":
-            vector = await embeddings.embed(cleaned)
-            rows = await repository.search_by_embedding(session, vector, limit=limit)
-            if rows:
-                return [doc for doc, _score in rows], "pgvector"
+    if (
+        embeddings is not None
+        and getattr(embeddings, "enabled", False)
+        and session.bind is not None
+        and session.bind.dialect.name == "postgresql"
+    ):
+        vector = await embeddings.embed(cleaned)
+        rows = await repository.search_by_embedding(session, vector, limit=limit)
+        if rows:
+            return [doc for doc, _score in rows], "pgvector"
 
     docs = await repository.search_lexical(session, cleaned, limit=limit)
     return docs, "lexical"

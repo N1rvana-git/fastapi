@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.core.cache import TwoLevelCache
 from src.app.core.exceptions import (
     BusinessRuleViolation,
     FeatureUnavailableError,
@@ -114,7 +115,9 @@ async def toggle_favourite(
 # --------------------------------------------------------------------------- #
 # Tags
 # --------------------------------------------------------------------------- #
-async def list_tags(session: AsyncSession, *, cache: Any | None = None) -> list[dict[str, Any]]:
+async def list_tags(
+    session: AsyncSession, *, cache: TwoLevelCache | None = None
+) -> list[dict[str, Any]]:
     async def loader() -> list[dict[str, Any]]:
         tags = await repository.list_tags(session)
         return [{"id": tag.id, "name": tag.name} for tag in tags]
@@ -193,12 +196,16 @@ async def search_by_text(
         raise ValidationError("搜索内容不能为空")
 
     # Preferred path: real pgvector ANN search over text embeddings.
-    if embeddings is not None and getattr(embeddings, "enabled", False):
-        if session.bind is not None and session.bind.dialect.name == "postgresql":
-            vector = await embeddings.embed(cleaned)
-            rows = await repository.search_by_text_embedding(session, vector, limit=limit)
-            if rows:
-                return rows, "pgvector"
+    if (
+        embeddings is not None
+        and getattr(embeddings, "enabled", False)
+        and session.bind is not None
+        and session.bind.dialect.name == "postgresql"
+    ):
+        vector = await embeddings.embed(cleaned)
+        rows = await repository.search_by_text_embedding(session, vector, limit=limit)
+        if rows:
+            return rows, "pgvector"
 
     # Cross-modal fallback (text vector vs. image vectors) when CLIP is present.
     if vision is not None and getattr(vision, "available", False):

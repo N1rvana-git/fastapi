@@ -110,7 +110,9 @@ class FeishuClient:
 
         try:
             return await retry_async(
-                call, attempts=3, retry_on=_RETRYABLE + (DependencyUnavailableError,)
+                call,
+                attempts=3,
+                retry_on=(*_RETRYABLE, DependencyUnavailableError),
             )
         except Exception:
             logger.exception("feishu send failed", extra={"ctx_open_id": open_id})

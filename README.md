@@ -29,8 +29,9 @@
 | 安全 | 匿名可注册为 `admin`；JWT 密钥默认空；上传用原始文件名（路径穿越） | 角色提升受控；密钥启动强校验；uuid 文件名 + 魔数校验 + 大小限制；CORS 白名单 |
 | 质量 | flake8 且 `\|\| true`，测试互相覆盖、断言错 | 90 个测试（unit + integration），ruff/mypy/pre-commit/CI 门禁，迁移双向验证 |
 
-> 说明：本机环境无法联网安装 `ruff`/`mypy`/`docker`，所以 `pytest`（90 passed）与 Python 导入、
-> 真实 uvicorn 冒烟、`alembic upgrade/downgrade` 均已实测；ruff/mypy/Dockerfile 已配置但未在本机执行。
+> 说明：`pytest`（90 passed）、`ruff check`、`ruff format --check`、`mypy src/app`、真实 uvicorn 冒烟、
+> `alembic upgrade/downgrade` 与 `uv lock` 均已在本机实测通过；覆盖率约 67%（CI 门禁 60%）。
+> Docker 镜像构建需要可用的 Docker daemon，尚未在本机完成。
 
 ---
 
@@ -153,7 +154,7 @@ docker compose logs -f web worker
 make test        # pytest（90 项）
 make lint        # ruff check
 make format      # ruff format
-make typecheck   # mypy（CI 中为告警项，见下）
+make typecheck   # mypy（CI 硬门禁）
 make migrate     # alembic upgrade head
 make worker      # 启动异步 worker
 make admin EMAIL=you@example.com   # 把已有账号提升为管理员
@@ -276,14 +277,13 @@ Agent 调用 create_order → 金额 >= AGENT_APPROVAL_THRESHOLD
 ```bash
 ruff check src/app tests          # lint
 ruff format --check src/app tests # 格式
-mypy                              # 类型（当前为 CI 告警项，见 docs/ARCHITECTURE.md）
-pytest --cov                      # 90 个测试 + 覆盖率
+mypy src/app                      # 类型检查（0 errors，CI 硬门禁）
+pytest --cov                      # 90 个测试 + 覆盖率（约 67%）
 alembic upgrade head && alembic downgrade base   # 迁移可上可下
 ```
 
-CI（`.github/workflows/ci.yml`）：lint/format 为硬门禁 → 测试与覆盖率 → 迁移双向验证 →
-镜像构建推送（仅 push）。`mypy` 目前设为 `continue-on-error: true`，是如实标注的技术债，
-不是已通过的检查。
+CI（`.github/workflows/ci.yml`）：lint/format/mypy/测试与覆盖率均为硬门禁 → 迁移双向验证 →
+镜像构建推送（仅 push）。本机 0.2.1 实测：ruff 0 告警、mypy 0 错误、90 测试全绿、覆盖率约 67%。
 
 ---
 

@@ -113,11 +113,9 @@ def configure_logging(settings: Settings) -> None:
     """Idempotently install the root logging configuration."""
 
     level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
-    formatter: logging.Formatter
-    if settings.LOG_FORMAT == "json":
-        formatter = JsonFormatter()
-    else:
-        formatter = TextFormatter()
+    formatter: logging.Formatter = (
+        JsonFormatter() if settings.LOG_FORMAT == "json" else TextFormatter()
+    )
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(formatter)

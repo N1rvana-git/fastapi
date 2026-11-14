@@ -21,6 +21,7 @@ horizontally scaled worker tomorrow, without rewriting business code.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import socket
@@ -86,7 +87,7 @@ def clear_registry() -> None:
 class TaskDispatcher(Protocol):
     async def enqueue(self, name: str, **kwargs: Any) -> str | None: ...
 
-    async def drain(self, timeout: float = 10.0) -> None: ...
+    async def drain(self, grace_seconds: float = 10.0) -> None: ...
 
     async def aclose(self) -> None: ...
 
@@ -132,22 +133,20 @@ class InProcessDispatcher:
         local_task.add_done_callback(self._tasks.discard)
         return job_id
 
-    async def drain(self, timeout: float = 10.0) -> None:
+    async def drain(self, grace_seconds: float = 10.0) -> None:
         if not self._tasks:
             return
         pending = list(self._tasks)
-        done, still_pending = await asyncio.wait(pending, timeout=timeout)
+        done, still_pending = await asyncio.wait(pending, timeout=grace_seconds)
         for item in still_pending:
             item.cancel()
         for item in done:
-            try:
+            with contextlib.suppress(Exception):
                 item.result()
-            except Exception:
-                pass
 
     async def aclose(self) -> None:
         self._closed = True
-        await self.drain(timeout=5.0)
+        await self.drain(grace_seconds=5.0)
 
 
 class RedisStreamDispatcher:
@@ -193,9 +192,9 @@ class RedisStreamDispatcher:
                 return await self.fallback.enqueue(name, **kwargs)
             return None
 
-    async def drain(self, timeout: float = 10.0) -> None:
+    async def drain(self, grace_seconds: float = 10.0) -> None:
         if self.fallback is not None:
-            await self.fallback.drain(timeout)
+            await self.fallback.drain(grace_seconds)
 
     async def aclose(self) -> None:
         if self.fallback is not None:

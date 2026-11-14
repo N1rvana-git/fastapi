@@ -147,7 +147,7 @@ alembic downgrade -1          # 回到 c924f1debfb5
 | `AGENT_APPROVAL_THRESHOLD` | 超过该金额的下单需人工审批（默认 1000） |
 | `AGENT_DISCONNECT_POLICY` | `continue`（默认，跑完落库）或 `abort`（立即省 token） |
 | `IDEMPOTENCY_HEADER_REQUIRED` | 生产建议 `true`：写接口强制带幂等键 |
-| `CHAT_API_KEY` | LLM key；旧的 `API_KEY` / `API_KEy` 仍兼容 |
+| `CHAT_API_KEY` | LLM key；旧的 `API_KEY` 仍兼容（`API_KEy` 拼写别名已在 0.2.1 移除） |
 | `VISION_ENABLED` | 不需要以图搜图时设 `false`，省掉模型加载 |
 | `UPLOAD_DIR` | 上传目录（可为绝对路径） |
 
@@ -189,8 +189,7 @@ alembic downgrade -1          # 回到 c924f1debfb5
 ## 7. 未来工作（与本文档相邻）
 
 - 生成并提交 `uv.lock`（本机离线无法生成）；
-- 将 `mypy` 从告警改为硬门禁（当前 `continue-on-error: true`）；
-- 覆盖率从 60% 门槛逐步提高到核心模块 80%；
+- 覆盖率从 60% 门槛逐步提高到核心模块 80%（当前约 67%）；
 - 接入 OpenTelemetry（保留 `trace_id` 上下文即可低成本挂载）；
 - 如需完整 LangGraph 状态机：安装 `langgraph` + `langgraph-checkpoint-postgres`，
   实现 `AgentRuntime` 协议，并在 lifespan 中按"双池隔离"建 checkpointer 连接池。

@@ -144,7 +144,7 @@ class LLMGateway:
                     raise
                 except DependencyUnavailableError:
                     raise
-                except (_RetryableUpstream, *_RETRYABLE_TRANSPORT) as exc:  # type: ignore[misc]
+                except (_RetryableUpstream, *_RETRYABLE_TRANSPORT) as exc:
                     if emitted or attempt >= attempts:
                         raise DependencyUnavailableError(
                             f"LLM upstream unavailable after {attempt} attempt(s): {exc}"

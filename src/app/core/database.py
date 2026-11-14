@@ -17,7 +17,7 @@ import asyncio
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 
-from sqlalchemy import MetaData, text
+from sqlalchemy import MetaData, Table, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -105,14 +105,14 @@ class Database:
         finally:
             await session.close()
 
-    async def ping(self, timeout: float = 2.0) -> None:
-        """Raise when the database is not reachable within ``timeout`` seconds."""
+    async def ping(self, max_wait: float = 2.0) -> None:
+        """Raise when the database is not reachable within ``max_wait`` seconds."""
 
         async def _ping() -> None:
             async with self.engine.connect() as connection:
                 await connection.execute(text("SELECT 1"))
 
-        await asyncio.wait_for(_ping(), timeout=timeout)
+        await asyncio.wait_for(_ping(), timeout=max_wait)
 
     async def create_all(self) -> None:
         """Test/bootstrap helper. Production schema changes go through Alembic."""
@@ -157,5 +157,5 @@ def import_all_models() -> None:
     from src.app.modules.users import models as _user_models  # noqa: F401
 
 
-def table_names(tables: Iterable[object] | None = None) -> list[str]:
+def table_names(tables: Iterable[Table] | None = None) -> list[str]:
     return sorted(table.name for table in (tables or Base.metadata.sorted_tables))

@@ -318,6 +318,9 @@ async def toggle_favorite(
 @router.post(
     "/{item_id}/buy",
     summary="Buy one unit (idempotent)",
+    # The handler may return the cached JSONResponse (idempotent replay), so the
+    # union return type must not be turned into a Pydantic response model.
+    response_model=None,
 )
 async def buy_item(
     request: Request,
@@ -326,7 +329,7 @@ async def buy_item(
     user: CurrentUser,
     guard: IdempotencyGuard = Depends(buy_item_idempotency),
     _: None = Depends(rate_limit("buy", limit=20, window_seconds=60)),
-) -> dict[str, object]:
+) -> dict[str, object] | Response:
     replayed = replay_response(guard)
     if replayed is not None:
         return replayed

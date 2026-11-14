@@ -64,8 +64,14 @@ def test_development_gets_ephemeral_secret() -> None:
 
 
 def test_api_key_alias_is_resolved(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("API_KEy", "legacy-key")
-    settings = _settings(CHAT_API_KEY="", API_KEY="")
+    monkeypatch.setenv("API_KEY", "legacy-key")
+    settings = Settings(
+        _env_file=None,
+        ENVIRONMENT="test",
+        SECRET_KEY=_LONG_SECRET,
+        DATABASE_URL="sqlite+aiosqlite:///:memory:",
+        CHAT_API_KEY="",
+    )
     assert settings.chat_api_key == "legacy-key"
 
 

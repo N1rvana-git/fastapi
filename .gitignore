@@ -68,6 +68,7 @@ __pycache__/
 # Tooling caches
 .ruff_cache/
 .mypy_cache/
+.uv-cache/
 .docker/
 ci_migrations.db
 

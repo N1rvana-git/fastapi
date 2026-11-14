@@ -17,11 +17,13 @@ import asyncio
 import json
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, TypeVar, cast
 
 from src.app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+T = TypeVar("T")
 
 
 class LocalTTLCache:
@@ -104,11 +106,11 @@ class TwoLevelCache:
             logger.debug("redis cache set failed: %s", exc)
 
     async def get_or_load(
-        self, key: str, loader: Callable[[], Awaitable[Any]], ttl: int | None = None
-    ) -> Any:
+        self, key: str, loader: Callable[[], Awaitable[T]], ttl: int | None = None
+    ) -> T:
         cached = await self.get(key)
         if cached is not None:
-            return cached
+            return cast(T, cached)
         value = await loader()
         if value is not None:
             await self.set(key, value, ttl)

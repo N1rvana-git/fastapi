@@ -41,7 +41,8 @@ _TRACE_RE = re.compile(r"^[A-Za-z0-9._:-]{8,64}$")
 
 
 def _header(scope: Scope, name: bytes) -> str | None:
-    for key, value in scope.get("headers") or []:
+    headers: list[tuple[bytes, bytes]] = scope.get("headers") or []
+    for key, value in headers:
         if key == name:
             return value.decode("latin-1")
     return None

@@ -22,7 +22,7 @@ import asyncio
 import json
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -232,10 +232,8 @@ class ThreadLockManager:
         finally:
             stop.set()
             watchdog.cancel()
-            try:
+            with suppress(asyncio.CancelledError, Exception):
                 await watchdog
-            except (asyncio.CancelledError, Exception):
-                pass
             await self._release(thread_id, run_id)
 
     async def _acquire(self, thread_id: str, run_id: str) -> bool:

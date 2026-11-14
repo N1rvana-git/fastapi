@@ -12,7 +12,7 @@ Rules:
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, cast
 
 from fastapi import Depends, Request
 from fastapi.responses import JSONResponse
@@ -37,6 +37,10 @@ from src.app.core.security import TokenService
 from src.app.modules.users import repository as users_repository
 from src.app.modules.users.models import UserModel
 
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from src.app.container import AppContainer
+    from src.app.modules.chat.service import ChatService
+
 # ``token`` is the historical endpoint; keep the OpenAPI security scheme honest.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/token", auto_error=False)
@@ -45,31 +49,32 @@ IDEMPOTENCY_HEADER = "X-Idempotency-Key"
 
 
 def get_settings(request: Request) -> Settings:
-    return request.app.state.settings
+    return cast(Settings, request.app.state.settings)
 
 
-def get_container(request: Request):
-    return request.app.state.container
+def get_container(request: Request) -> AppContainer:
+    # cast() takes a runtime expression, so the TYPE_CHECKING import is quoted.
+    return cast("AppContainer", request.app.state.container)
 
 
 def get_database(request: Request) -> Database:
-    return request.app.state.container.database
+    return cast(Database, request.app.state.container.database)
 
 
 def get_token_service(request: Request) -> TokenService:
-    return request.app.state.container.token_service
+    return cast(TokenService, request.app.state.container.token_service)
 
 
 def get_cache(request: Request) -> TwoLevelCache:
-    return request.app.state.container.cache
+    return cast(TwoLevelCache, request.app.state.container.cache)
 
 
 def get_rate_limiter(request: Request) -> RateLimiter:
-    return request.app.state.container.rate_limiter
+    return cast(RateLimiter, request.app.state.container.rate_limiter)
 
 
-def get_chat_service(request: Request):
-    return request.app.state.container.chat_service
+def get_chat_service(request: Request) -> ChatService:
+    return cast("ChatService", request.app.state.container.chat_service)
 
 
 async def get_db_session(request: Request) -> AsyncIterator[AsyncSession]:

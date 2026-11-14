@@ -9,6 +9,7 @@ message instead of fabricated prices (the old fallback invented numbers).
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from urllib.parse import quote
 
 from src.app.core.logging import get_logger
@@ -68,10 +69,8 @@ async def _scrape(item_name: str) -> str:
         raise ScraperUnavailable("全网比价暂时不可用，请以平台内价格为准") from exc
     finally:
         if browser is not None:
-            try:
+            with suppress(Exception):
                 await browser.close()
-            except Exception:  # pragma: no cover
-                pass
 
 
 __all__ = ["ScraperUnavailable", "search_market_price"]

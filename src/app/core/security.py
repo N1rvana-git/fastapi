@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import importlib.util
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -35,23 +36,20 @@ class PasswordHasher:
 
     def __init__(self) -> None:
         schemes = ["bcrypt"]
-        try:  # argon2 is optional; prefer it when available
-            import argon2  # noqa: F401
-
+        # argon2 is optional: prefer it when the extra is installed.
+        if importlib.util.find_spec("argon2") is not None:
             schemes = ["argon2", "bcrypt"]
-        except Exception:  # pragma: no cover - depends on the deployment
-            pass
         self._context = CryptContext(schemes=schemes, deprecated="auto")
 
     @property
     def primary_scheme(self) -> str:
-        return self._context.schemes()[0]
+        return str(self._context.schemes()[0])
 
     def hash(self, password: str) -> str:
         if not password:
             raise ValidationError("Password must not be empty")
         self._ensure_bcrypt_limit(password)
-        return self._context.hash(password)
+        return str(self._context.hash(password))
 
     def verify(self, plain_password: str, hashed_password: str) -> bool:
         if not plain_password or not hashed_password:
@@ -128,7 +126,7 @@ class TokenService:
             raise UnauthorizedError("Could not validate credentials") from exc
         if not str(payload.get("sub", "")).strip():
             raise UnauthorizedError("Could not validate credentials")
-        return payload
+        return dict(payload)
 
 
 def verify_shared_secret(expected: str, provided: str | None) -> bool:

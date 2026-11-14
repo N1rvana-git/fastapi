@@ -12,7 +12,7 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.app.modules.items.models import ItemModel, TagModel
+from src.app.modules.items.models import ItemModel, TagModel, favourites
 
 
 async def list_items(
@@ -186,24 +186,18 @@ async def toggle_favourite(session: AsyncSession, item: ItemModel, user_id: int)
     existing_ids = {user.id for user in item.favourited_by}
     if user_id in existing_ids:
         await session.execute(
-            delete(_favourites_table()).where(
-                _favourites_table().c.user_id == user_id,
-                _favourites_table().c.item_id == item.id,
+            delete(favourites).where(
+                favourites.c.user_id == user_id,
+                favourites.c.item_id == item.id,
             )
         )
         await session.commit()
         await session.refresh(item, attribute_names=["favourited_by"])
         return False
-    await session.execute(_favourites_table().insert().values(user_id=user_id, item_id=item.id))
+    await session.execute(favourites.insert().values(user_id=user_id, item_id=item.id))
     await session.commit()
     await session.refresh(item, attribute_names=["favourited_by"])
     return True
-
-
-def _favourites_table():
-    from src.app.modules.items.models import favourites
-
-    return favourites
 
 
 __all__ = [

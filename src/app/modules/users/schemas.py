@@ -17,7 +17,7 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: Password
     username: str | None = Field(default=None, min_length=2, max_length=64)
-    role: Literal["user", "admin"] = ROLE_USER
+    role: Literal["user", "admin"] = "user"
 
     @field_validator("password")
     @classmethod

@@ -103,7 +103,12 @@ async def chat_stream(
         idempotency_key=validate_idempotency_key(x_idempotency_key),
         message=payload.resolve_message(),
     )
-    return await service.handle_stream(ctx, request=request, last_event_id=last_event_id)
+    run = await service.handle_stream(
+        ctx,
+        last_event_id=last_event_id,
+        is_disconnected=request.is_disconnected,
+    )
+    return StreamingResponse(run.events, media_type=run.media_type, headers=run.headers)
 
 
 @router.get("/history", summary="Chat history")

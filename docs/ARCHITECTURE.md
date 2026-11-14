@@ -236,6 +236,11 @@ for step in 1..AGENT_MAX_STEPS:
 "持久化审批表"是两种实现，当前默认 native（依赖不在基线镜像中）。参考实现见
 `docs/ARCHITECTURE.md` §6.4 与 `MIGRATION.md` 的"未来工作"。
 
+> 边界说明（0.2.1）：`chat/service.py` 不 import FastAPI。它返回与传输无关的
+> `ChatRun(events: AsyncIterator[str], headers, media_type)`，断线探测以
+> `Callable[[], Awaitable[bool]]` 注入；`StreamingResponse` 与 `Request.is_disconnected`
+> 只存在于 `chat/router.py`。
+
 ---
 
 ## 6. 交易与 HITL
@@ -333,14 +338,14 @@ PDF §3 使用 `AsyncPostgresSaver` + 独立 psycopg3 连接池 + `interrupt()`�
 
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
-| `uv.lock` 实际锁定 | 未生成 | 本机无网络；CI 首次运行 `uv lock` 应提交产物 |
-| `structlog` | 未使用 | 无法安装；自研 JSON formatter 覆盖相同能力，缺 `bind()` 链式 API |
+| `uv.lock` 实际锁定 | 已生成 | `uv.lock`（112 包）已提交，`uv lock --check` 通过 |
+| `structlog` | 未使用 | 依赖未引入；自研 JSON formatter 覆盖相同能力，缺 `bind()` 链式 API |
 | OpenTelemetry 链路追踪 | 未接入 | 无 SDK；保留 `trace_id` 上下文与中间件挂载点，接入成本低 |
-| `mypy --strict` 全绿 | 未达成 | 已配置规则与 CI（告警）；注释补全需要迭代 |
-| 覆盖率 ≥80%（核心模块） | 未测量 | 本机缺 `pytest-cov`；CI 门禁先设 60%，逐步提升 |
+| `mypy` 严格配置全绿 | 已达成（0.2.1） | `mypy src/app` → 0 errors，CI 已移除 `continue-on-error` |
+| 覆盖率 ≥80%（核心模块） | 未达成 | 当前约 67%；CI 门禁 60%，逐步提升 |
 | Granian / uvloop | 未启用 | 镜像默认 uvicorn；Granian 是可选替换（见 RUNBOOK） |
 | Temporal / Taskiq | 未引入 | 自研 Redis Stream 队列满足当前规模；复杂长流程再引入 |
-| LangGraph checkpointer | 未接入 | 见 §6.4 |
+| LangGraph checkpointer | 未接入 | 见 §6.4；0.2.x 计划接入（双池 + interrupt/resume） |
 | 多机房/容灾演练 | 未涉及 | 超出单项目范围 |
 | `pip-audit` / Dependabot | 未启用 | 建议在 GitHub 打开 Dependabot |
 
@@ -355,7 +360,7 @@ PDF §3 使用 `AsyncPostgresSaver` + 独立 psycopg3 连接池 + `interrupt()`�
 | 架构设计合理性 | 4 | 模块化单体、单向依赖、组合根、领域异常 | 用 `import-linter` 把分层规则变成 CI 门禁 |
 | 性能与可扩展性 | 4 | 全异步、连接池、两级缓存、原子 UPDATE、SSE 背压 | 压测（locust/k6）出 P95；大列表引入 keyset 分页 |
 | 服务治理与稳定性 | 3 | 限流/超时/重试/退避、会话锁、审批超时、优雅停机 | 熔断器（半开/关闭）与降级开关；多副本演练 |
-| 工程化成熟度 | 4 | ruff/mypy/pre-commit/CI/88 测试/迁移双向 | mypy 收紧、覆盖率门槛提升、依赖审计 |
+| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、90 测试、uv.lock、迁移双向 | 覆盖率 80%、依赖审计 |
 | 可观测性 | 3 | JSON 日志 + trace_id + 双探针 + 可选指标 | 接入 OTel/Prometheus + Grafana 面板与分级告警 |
 | 安全与合规 | 4 | JWT/密码/RBAC/上传/CORS/错误脱敏 | `pip-audit`、限流分级、敏感字段脱敏展示 |
 | 业务适配与演进能力 | 4 | 新增域只需加目录；任务/工具/审批即插即用 | 写 ADR、补 API 契约测试（Schemathesis） |

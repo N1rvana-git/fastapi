@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from contextvars import ContextVar, Token
 
 _trace_id: ContextVar[str] = ContextVar("trace_id", default="")
@@ -47,10 +47,8 @@ def set_user_id(user_id: object) -> Token[str]:
 
 
 def reset_user_id(token: Token[str]) -> None:
-    try:
+    with suppress(ValueError):  # token created in another context
         _user_id.reset(token)
-    except ValueError:  # pragma: no cover - token from another context
-        pass
 
 
 @contextmanager

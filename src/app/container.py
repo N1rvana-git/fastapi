@@ -11,6 +11,7 @@ model before the first request.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -157,14 +158,12 @@ class AppContainer:
     async def shutdown(self) -> None:
         if self._cleanup_task is not None:
             self._cleanup_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._cleanup_task
-            except (asyncio.CancelledError, Exception):
-                pass
             self._cleanup_task = None
 
         if hasattr(self, "chat_service"):
-            await self.chat_service.shutdown(timeout=10.0)
+            await self.chat_service.shutdown(grace_seconds=10.0)
         if hasattr(self, "dispatcher"):
             await self.dispatcher.aclose()
         await self.http.close()
@@ -179,7 +178,7 @@ class AppContainer:
 
         started = time.perf_counter()
         try:
-            await self.database.ping(timeout=2.0)
+            await self.database.ping(max_wait=2.0)
             checks.append(("database", True, (time.perf_counter() - started) * 1000, None))
         except Exception as exc:
             checks.append(

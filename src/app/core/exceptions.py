@@ -12,7 +12,7 @@ Rules enforced by this module:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -224,7 +224,7 @@ _CODE_BY_STATUS = {
 }
 
 
-def _jsonable_errors(errors: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _jsonable_errors(errors: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """``RequestValidationError.errors()`` can contain non-JSON values (e.g. bytes)."""
 
     cleaned: list[dict[str, Any]] = []

@@ -45,7 +45,7 @@ class VisionService:
                 from transformers import ChineseCLIPModel, ChineseCLIPProcessor
 
                 processor = ChineseCLIPProcessor.from_pretrained(self.settings.VISION_MODEL)
-                model = ChineseCLIPModel.from_pretrained(self.settings.VISION_MODEL)
+                model: Any = ChineseCLIPModel.from_pretrained(self.settings.VISION_MODEL)
                 model.eval()
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 model.to(device)
@@ -106,44 +106,56 @@ class VisionService:
 
     def _image_embedding_sync(self, image_bytes: bytes) -> list[float]:
         self._ensure_loaded()
+        processor, model = self._require_model()
         import torch
         from PIL import Image
 
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        inputs = self._processor(images=image, return_tensors="pt").to(self._device)
+        inputs = processor(images=image, return_tensors="pt").to(self._device)
         with torch.no_grad():
-            features = self._model.get_image_features(**inputs)
+            features = model.get_image_features(**inputs)
         features = self._normalise(features)
-        return features.squeeze().cpu().tolist()
+        return list(features.squeeze().cpu().tolist())
 
     def _text_embedding_sync(self, text: str) -> list[float]:
         self._ensure_loaded()
+        processor, model = self._require_model()
         import torch
 
-        inputs = self._processor(text=[text], padding=True, return_tensors="pt").to(self._device)
+        inputs = processor(text=[text], padding=True, return_tensors="pt").to(self._device)
         with torch.no_grad():
-            features = self._model.get_text_features(**inputs)
+            features = model.get_text_features(**inputs)
         features = self._normalise(features)
-        return features.squeeze().cpu().tolist()
+        return list(features.squeeze().cpu().tolist())
 
     def _predict_tags_sync(self, image_bytes: bytes, candidates: list[str]) -> list[str]:
         self._ensure_loaded()
+        processor, model = self._require_model()
         import torch
         from PIL import Image
 
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         prompts = [f"一张{label}的照片" for label in candidates]
-        image_inputs = self._processor(images=image, return_tensors="pt").to(self._device)
-        text_inputs = self._processor(text=prompts, padding=True, return_tensors="pt").to(
-            self._device
-        )
+        image_inputs = processor(images=image, return_tensors="pt").to(self._device)
+        text_inputs = processor(text=prompts, padding=True, return_tensors="pt").to(self._device)
         with torch.no_grad():
-            image_features = self._normalise(self._model.get_image_features(**image_inputs))
-            text_features = self._normalise(self._model.get_text_features(**text_inputs))
+            image_features = self._normalise(model.get_image_features(**image_inputs))
+            text_features = self._normalise(model.get_text_features(**text_inputs))
         logits = 100.0 * image_features @ text_features.T
         probabilities = logits.softmax(dim=1).cpu().numpy()[0]
-        ranked = sorted(zip(candidates, probabilities), key=lambda pair: pair[1], reverse=True)
+        ranked = sorted(
+            zip(candidates, probabilities, strict=True),
+            key=lambda pair: pair[1],
+            reverse=True,
+        )
         return [label for label, probability in ranked[:2] if probability > 0.1]
+
+    def _require_model(self) -> tuple[Any, Any]:
+        """Narrow the optional attributes after ``_ensure_loaded`` for mypy."""
+
+        if self._processor is None or self._model is None:
+            raise FeatureUnavailableError("Vision model is not loaded")
+        return self._processor, self._model
 
     @staticmethod
     def _normalise(features: Any) -> Any:

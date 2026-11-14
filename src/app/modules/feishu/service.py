@@ -156,9 +156,12 @@ class FeishuService:
             f"买家：{(buyer.email if buyer else '未知')}\n收货地址：{address or '未填写'}"
         )
         for candidate in (seller, buyer):
-            if candidate is not None and candidate.feishu_open_id:
-                if await self.deps.client.send_text(candidate.feishu_open_id, text):
-                    return
+            if (
+                candidate is not None
+                and candidate.feishu_open_id
+                and await self.deps.client.send_text(candidate.feishu_open_id, text)
+            ):
+                return
         logger.info("order alert has no Feishu recipient", extra={"ctx_item_id": item_id})
 
 

@@ -76,10 +76,10 @@ class RedisManager:
             )
         return self._available
 
-    async def ping(self, timeout: float | None = None) -> bool:
+    async def ping(self, max_wait: float | None = None) -> bool:
         if self._client is None:
             return False
-        wait = timeout if timeout is not None else self.settings.REDIS_SOCKET_TIMEOUT
+        wait = max_wait if max_wait is not None else self.settings.REDIS_SOCKET_TIMEOUT
         try:
             pong = await asyncio.wait_for(self._client.ping(), timeout=wait)
             self._available = bool(pong)

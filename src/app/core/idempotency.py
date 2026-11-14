@@ -22,11 +22,11 @@ import json
 import math
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 
-class IdempotencyOutcome(str, Enum):
+class IdempotencyOutcome(StrEnum):
     STARTED = "started"
     REPLAY = "replay"
     IN_PROGRESS = "in_progress"

@@ -58,7 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         await container.startup()
         try:
-            await container.database.ping(timeout=3.0)
+            await container.database.ping(max_wait=3.0)
             logger.info("database reachable")
         except Exception as exc:
             logger.warning(

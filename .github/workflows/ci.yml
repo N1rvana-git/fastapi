@@ -37,10 +37,7 @@ jobs:
       - name: Ruff (format check)
         run: ruff format --check src/app tests
 
-      # Advisory while the annotation backlog is burned down; ruff + tests are
-      # the hard gates. Flip `continue-on-error` off once `mypy` is clean.
-      - name: Mypy (advisory)
-        continue-on-error: true
+      - name: Mypy (hard gate)
         run: mypy
 
       - name: Tests + coverage

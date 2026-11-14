@@ -83,20 +83,24 @@
 | 项目 | 命令 | 结果 |
 | --- | --- | --- |
 | 单元 + 集成测试 | `pytest tests -q` | **90 passed**（约 15s；SQLite 内存库、无 Redis、无外部网络） |
-| 全量语法 | `ast.parse` 全部 `src/**.py` + `tests/**.py` | 通过 |
-| 应用导入 | `import src.main, src.worker, src.make_admin` | 通过 |
+| 覆盖率 | `pytest --cov=src/app` | **约 67%**（CI 门禁 60%） |
+| Lint | `ruff check src tests` | **All checks passed**（0 告警） |
+| 格式 | `ruff format --check src tests` | 92 files already formatted |
+| 类型检查 | `mypy src/app` | **Success: no issues found in 72 source files** |
+| 架构边界 | `grep 'from fastapi' modules/*/service.py` | 0 命中；`ChatService` 只返回 `ChatRun` |
 | 迁移升级 | `alembic upgrade head`（SQLite） | 通过，`agent_approvals/favourites` 与新增列齐全 |
 | 迁移回滚 | `alembic downgrade base` | 通过，干净回退 |
+| 本地库重建 | 删除指向 `242a197b6cf6` 的 `test.db` 后重建 | 版本 `b2f4c7d91a30`，10 张表齐全 |
+| 依赖锁定 | `uv lock` / `uv lock --check` | `uv.lock`（112 包）一致 |
 | 真实服务冒烟 | `uvicorn src.main:app`（SQLite + 无 Redis） | `/health/live` 200、`/health/ready` 200、注册/登录/建商品/列表 全部正常 |
 | SSE 冒烟 | `POST /items/ai/agent/stream` | 200，返回 `event: error`（无有效 LLM key），SSE 头与帧格式正确 |
 | 配置一致性 | `.env.example` vs `Settings.model_fields` | 无未知/缺失键 |
 | YAML/TOML | `yaml.safe_load` / `tomllib` | 全部通过 |
 
-**未能在本机验证**（如实说明）：
-- `ruff` / `mypy`：环境离线无法安装（CI 配置已就绪，mypy 为告警项）；
-- `docker build` / `docker compose up`：无网络拉取基础镜像；
-- 覆盖率百分比：缺 `pytest-cov`，CI 门禁暂设 60%；
-- 真实 LLM/飞书/Playwright 端到端：需要密钥与浏览器（代码路径有降级与错误处理，且 SSE 已实测错误帧）。
+**仍未在本机验证**（如实说明）：
+- `docker build` / `docker compose up`：需要可用的 Docker daemon（本会话无法访问其命名管道）；
+- 真实 LLM/飞书/Playwright 端到端：需要密钥与浏览器（代码路径有降级与错误处理，且 SSE 已实测错误帧）；
+- 真实 PostgreSQL + pgvector：本机未安装 `psql/pg_dump`，仅验证了 SQLite 迁移链。
 
 ---
 
@@ -117,7 +121,7 @@
 
 ## 6. 未完成与风险（面试时主动说）
 
-1. `uv.lock` 未生成（离线）；`mypy` 未清零；覆盖率未测量——均为"流程/工具有了，数据还没跑"。
+1. 覆盖率约 67%，距核心模块 80% 目标仍有差距（下一步补 SSE/网关/视觉降级路径的测试）。
 2. HITL 用业务库审批表代替 LangGraph checkpointer：语义等价但**没有**多步图快照回溯；
    未来接入 LangGraph 时保留审批表作为事实来源。
 3. 无 Redis 时幂等/限流/锁退化为进程内，多副本场景必须 Redis（`REDIS_REQUIRED=true`）。
@@ -157,8 +161,31 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 
 ## 8. 下一步 30/60/90
 
-- **30 天**：CI 上跑通 ruff/mypy/覆盖率并清掉告警；`uv lock`；补 `pip-audit`/Dependabot；
+- **30 天**：覆盖率从 67% 提到核心模块 80%；补 `pip-audit`/Dependabot；补 SSE/网关/降级路径测试；
 - **60 天**：接入 OpenTelemetry + Prometheus/Grafana 面板与分级告警；压测出 P95/P99；
   飞书签名校验；`email` 唯一索引（先清洗数据）；
 - **90 天**：多副本故障演练（Redis/DB/LLM 故障注入）；按需接入 LangGraph/Temporal 处理复杂长流程；
   把"分层规则""SSE 契约""错误码"做成自动化契约测试。
+
+---
+
+## 9. 0.2.1 质量硬化（2026-11-14）
+
+第一阶段提交 `ef2147e` 之后，本机真实环境（可联网）暴露了 4 个此前被离线沙箱掩盖的缺口，
+本轮已全部关闭：
+
+| 缺口 | 修复 |
+| --- | --- |
+| `chat/service.py` 直接 import FastAPI（架构破窗） | 新增传输无关的 `ChatRun(events, headers, media_type)`；断线探测改为注入 `Callable[[], Awaitable[bool]]`；`StreamingResponse`/`Request` 全部回到 `chat/router.py` |
+| 23 个 Ruff 告警 | SIM105/SIM102/SIM108/UP042/RUF005/RUF046/RUF059/B905 等逐一修复，`ruff check src tests` → 0 |
+| 33 个 Mypy 错误 | 协议签名（async generator 用 `def ... -> AsyncIterator`）、`cast`/`TypeVar` 收紧、vision 懒加载窄化、`Sequence` 参数类型等；`mypy src/app` → 0 errors |
+| 旧 `test.db` 指向废弃 revision `242a197b6cf6` | 删除并重建：`alembic upgrade head` → `b2f4c7d91a30`，10 张表齐全 |
+
+同时：
+
+- CI 的 `mypy` 从 `continue-on-error: true` 改为**硬门禁**；
+- 删除了 `API_KEy` 拼写别名（`API_KEY` 仍兼容），消除 Ruff SIM112，并同步测试与文档；
+- `_pdf_extract.txt`、`mypy_before.txt` 等临时产物已清理。
+
+复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 90 passed、
+覆盖率约 67%、干净 SQLite 迁移 up/down 通过。

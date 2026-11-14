@@ -45,7 +45,10 @@ class AgentEvent:
 
 
 class AgentRuntime(Protocol):
-    async def run(
+    # NOTE: a non-async ``def`` returning an AsyncIterator is the correct way to
+    # type an async-generator implementation; ``async def`` would make callers
+    # see a coroutine and fail to iterate it.
+    def run(
         self,
         *,
         user_id: int,

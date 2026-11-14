@@ -9,7 +9,6 @@ Environment variables win over ``.env``; ``.env`` is only a local convenience.
 
 from __future__ import annotations
 
-import os
 import secrets
 from functools import lru_cache
 from pathlib import Path
@@ -248,13 +247,9 @@ class Settings(BaseSettings):
 
     @property
     def chat_api_key(self) -> str:
-        """Resolve the (legacy) API-key aliases in one place.
+        """Resolve the API-key setting and its documented legacy alias."""
 
-        ``API_KEy`` is a historical typo in existing ``.env`` files; it is read
-        from the raw environment so it never becomes a first-class setting.
-        """
-
-        return self.CHAT_API_KEY or self.API_KEY or os.getenv("API_KEy", "")
+        return self.CHAT_API_KEY or self.API_KEY
 
     @property
     def cors_origins(self) -> list[str]:

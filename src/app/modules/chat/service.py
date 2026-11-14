@@ -18,12 +18,11 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import Request
-from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, desc, select
 
 from src.app.core.config import Settings
@@ -52,6 +51,24 @@ from src.app.modules.users.models import UserModel
 logger = get_logger(__name__)
 
 _TERMINAL_EVENTS = frozenset({"done", "error", "aborted", "interrupt_required"})
+
+#: Injected by the HTTP layer so the service can detect a gone client without
+#: knowing anything about Starlette/FastAPI request objects.
+DisconnectCheck = Callable[[], Awaitable[bool]]
+
+
+@dataclass(frozen=True)
+class ChatRun:
+    """Transport-agnostic description of an SSE response.
+
+    The router wraps ``events`` in ``StreamingResponse``; the service only knows
+    about bytes frames and headers, which keeps the FastAPI boundary in the
+    router (ARCHITECTURE.md section 2).
+    """
+
+    events: AsyncIterator[str]
+    headers: dict[str, str]
+    media_type: str = "text/event-stream"
 
 
 @dataclass(frozen=True)
@@ -253,12 +270,12 @@ class ChatService:
         self,
         ctx: ChatRequestContext,
         *,
-        request: Request,
         last_event_id: str | None = None,
-    ) -> StreamingResponse:
+        is_disconnected: DisconnectCheck | None = None,
+    ) -> ChatRun:
         settings = self.deps.settings
         run_key = f"chat:{ctx.user.id}:{ctx.idempotency_key}"
-        outcome, record = await self.deps.idempotency.begin(
+        outcome, _ = await self.deps.idempotency.begin(
             run_key,
             fingerprint=body_fingerprint(ctx.thread_id, ctx.message),
             ttl=settings.AGENT_STREAM_TTL_SECONDS,
@@ -282,11 +299,13 @@ class ChatService:
                 user_id=ctx.user.id,
             ),
         )
-        return StreamingResponse(
-            self._event_stream(
-                run_key=run_key, ctx=ctx, request=request, last_event_id=last_event_id
+        return ChatRun(
+            events=self._event_stream(
+                run_key=run_key,
+                ctx=ctx,
+                is_disconnected=is_disconnected,
+                last_event_id=last_event_id,
             ),
-            media_type="text/event-stream",
             headers={
                 **SSE_HEADERS,
                 "X-Idempotency-Key": ctx.idempotency_key,
@@ -433,7 +452,7 @@ class ChatService:
         *,
         run_key: str,
         ctx: ChatRequestContext,
-        request: Request,
+        is_disconnected: DisconnectCheck | None,
         last_event_id: str | None,
     ) -> AsyncIterator[str]:
         settings = self.deps.settings
@@ -443,7 +462,7 @@ class ChatService:
         last_activity = time.monotonic()
 
         while time.monotonic() < deadline:
-            if await _is_disconnected(request):
+            if await _client_gone(is_disconnected):
                 logger.info(
                     "chat client disconnected",
                     extra=log_extra(
@@ -509,29 +528,32 @@ class ChatService:
         except Exception:
             logger.exception("failed to append stream event", extra=log_extra(thread_id=thread_id))
 
-    async def shutdown(self, *, timeout: float = 10.0) -> None:
+    async def shutdown(self, *, grace_seconds: float = 10.0) -> None:
         """Drain in-flight runs (graceful shutdown)."""
 
         if not self._tasks:
             return
         logger.info("draining chat runs", extra=log_extra(count=len(self._tasks)))
         pending = list(self._tasks)
-        done, still_running = await asyncio.wait(pending, timeout=timeout)
+        done, still_running = await asyncio.wait(pending, timeout=grace_seconds)
         for task in still_running:
             task.cancel()
         if still_running:
             await asyncio.wait(still_running, timeout=2.0)
         for task in done | still_running:
-            try:
+            with suppress(asyncio.CancelledError, Exception):
                 task.result()
-            except (asyncio.CancelledError, Exception):
-                pass
 
 
-async def _is_disconnected(request: Request) -> bool:
+async def _client_gone(check: DisconnectCheck | None) -> bool:
+    """Consult the HTTP layer's disconnect probe, tolerating any failure."""
+
+    if check is None:
+        return False
     try:
-        return await request.is_disconnected()
+        return bool(await check())
     except Exception:
+        # Test transports (and some servers) do not implement is_disconnected.
         return False
 
 
@@ -554,7 +576,9 @@ def validate_idempotency_key(value: str | None) -> str:
 __all__ = [
     "ChatDeps",
     "ChatRequestContext",
+    "ChatRun",
     "ChatService",
+    "DisconnectCheck",
     "new_thread_id",
     "validate_idempotency_key",
 ]
