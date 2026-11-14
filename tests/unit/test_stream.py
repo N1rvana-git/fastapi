@@ -75,3 +75,38 @@ def test_sse_frame_includes_id_and_event() -> None:
     assert frame.startswith("id: 12-0\nevent: token\ndata: ")
     assert frame.endswith("\n\n")
     assert "你" in frame
+
+
+def test_stream_buffer_prefers_blocking_redis_client() -> None:
+    """A BLOCK read must not share the 1s-socket-timeout client."""
+
+    from src.app.modules.chat.stream import RedisStreamBuffer, build_stream_buffer
+
+    blocking = object()
+    calls: list[tuple[str, float | None]] = []
+
+    class FakeManager:
+        active_client = object()
+
+        def blocking_client(self, name: str, *, socket_timeout=None):
+            calls.append((name, socket_timeout))
+            return blocking
+
+    buffer = build_stream_buffer(FakeManager(), ttl=60, maxlen=10)
+    assert isinstance(buffer, RedisStreamBuffer)
+    assert buffer.client is blocking
+    assert calls == [("sse", None)]
+
+
+def test_stream_buffer_falls_back_when_redis_is_down() -> None:
+    from src.app.modules.chat.stream import InMemoryStreamBuffer, build_stream_buffer
+
+    class DownManager:
+        active_client = None
+
+        def blocking_client(self, name: str, *, socket_timeout=None):
+            # Real RedisManager returns None when the PING never succeeded.
+            return None
+
+    assert isinstance(build_stream_buffer(DownManager(), ttl=60, maxlen=10), InMemoryStreamBuffer)
+    assert isinstance(build_stream_buffer(None, ttl=60, maxlen=10), InMemoryStreamBuffer)

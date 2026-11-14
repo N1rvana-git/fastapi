@@ -288,7 +288,16 @@ class ThreadLockManager:
 
 
 def build_stream_buffer(redis_manager: Any | None, *, ttl: int, maxlen: int) -> StreamBuffer:
-    client = getattr(redis_manager, "active_client", None) if redis_manager is not None else None
+    """Prefer a dedicated blocking client.
+
+    ``XREAD ... BLOCK`` deliberately idles; sharing the short-timeout client
+    would raise ``redis.TimeoutError`` on every read in production.
+    """
+
+    if redis_manager is None:
+        return InMemoryStreamBuffer(ttl=ttl, maxlen=maxlen)
+    factory = getattr(redis_manager, "blocking_client", None)
+    client = factory("sse", socket_timeout=None) if callable(factory) else None
     if client is not None:
         return RedisStreamBuffer(client, ttl=ttl, maxlen=maxlen)
     return InMemoryStreamBuffer(ttl=ttl, maxlen=maxlen)

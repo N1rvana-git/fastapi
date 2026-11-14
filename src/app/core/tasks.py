@@ -225,10 +225,18 @@ class TaskWorker:
     registry: Mapping[str, TaskSpec] | None = None
     consumer_name: str = field(default_factory=lambda: f"{socket.gethostname()}-{os.getpid()}")
     _running: bool = False
+    _client_override: Any | None = None
 
     @property
     def _client(self) -> Any | None:
-        return getattr(self.redis_manager, "client", None)
+        if self._client_override is not None:
+            return self._client_override
+        factory = getattr(self.redis_manager, "blocking_client", None)
+        if callable(factory):
+            self._client_override = factory("worker", socket_timeout=None)
+        if self._client_override is None:
+            self._client_override = getattr(self.redis_manager, "client", None)
+        return self._client_override
 
     async def _ensure_group(self) -> None:
         client = self._client
@@ -272,8 +280,10 @@ class TaskWorker:
                     )
                 except asyncio.CancelledError:
                     raise
-                except Exception:
-                    logger.exception("task worker read failed")
+                except Exception as exc:
+                    # One concise line: a transient Redis hiccup must not print a
+                    # traceback every second.
+                    logger.warning("task worker read failed: %s: %s", type(exc).__name__, exc)
                     await asyncio.sleep(1.0)
                     continue
                 if not batches:

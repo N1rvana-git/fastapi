@@ -96,11 +96,12 @@
 | SSE 冒烟 | `POST /items/ai/agent/stream` | 200，返回 `event: error`（无有效 LLM key），SSE 头与帧格式正确 |
 | 配置一致性 | `.env.example` vs `Settings.model_fields` | 无未知/缺失键 |
 | YAML/TOML | `yaml.safe_load` / `tomllib` | 全部通过 |
+| 真实 PG(pgvector) + Redis 联调 | 独立容器 + API/worker 双进程 | **通过**：迁移、原子扣库存、任务队列 lag=0、SSE 流式/重放、HITL、pgvector 排序，详见 [REAL-ENV-VERIFICATION.md](REAL-ENV-VERIFICATION.md) |
 
 **仍未在本机验证**（如实说明）：
-- `docker build` / `docker compose up`：需要可用的 Docker daemon（本会话无法访问其命名管道）；
-- 真实 LLM/飞书/Playwright 端到端：需要密钥与浏览器（代码路径有降级与错误处理，且 SSE 已实测错误帧）；
-- 真实 PostgreSQL + pgvector：本机未安装 `psql/pg_dump`，仅验证了 SQLite 迁移链。
+- `docker build` / `docker compose up`（整套镜像构建）：需要拉取基础镜像，本次只用独立容器验证了依赖服务；
+- 真实商业 LLM/飞书/Playwright 端到端：使用本地 SSE stub 与单元/集成测试替代（真实密钥未使用）；
+- pgvector 索引（HNSW/IVFFlat）与大规模召回性能：只验证了 `ORDER BY cosine_distance` 的正确性。
 
 ---
 

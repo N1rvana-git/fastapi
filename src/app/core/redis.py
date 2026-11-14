@@ -21,6 +21,7 @@ class RedisManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._client: Any | None = None
+        self._blocking_clients: dict[str, Any] = {}
         self._available: bool | None = None
         self._closed = False
 
@@ -38,6 +39,35 @@ class RedisManager:
         """
 
         return self._client if self.available else None
+
+    def blocking_client(self, name: str, *, socket_timeout: float | None = None) -> Any | None:
+        """Dedicated client for ``BLOCK`` commands (XREAD/XREADGROUP).
+
+        A blocking read deliberately idles for up to ``block`` milliseconds;
+        using the shared client (``socket_timeout=1s``) makes *every* blocking
+        call race the socket timeout and surface ``redis.TimeoutError`` in a
+        hot loop.  These clients therefore have no socket timeout (the BLOCK
+        argument itself bounds the wait) and their own tiny connection pool.
+        """
+
+        if not self.available:
+            return None
+        cached = self._blocking_clients.get(name)
+        if cached is not None:
+            return cached
+        from redis.asyncio import Redis
+
+        client = Redis.from_url(
+            self.settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+            max_connections=4,
+            socket_timeout=socket_timeout,
+            socket_connect_timeout=self.settings.REDIS_SOCKET_TIMEOUT,
+            health_check_interval=30,
+        )
+        self._blocking_clients[name] = client
+        return client
 
     @property
     def available(self) -> bool:
@@ -89,6 +119,12 @@ class RedisManager:
         return self.available
 
     async def close(self) -> None:
+        for name, client in list(self._blocking_clients.items()):
+            try:
+                await client.aclose()
+            except Exception:  # pragma: no cover - best effort on shutdown
+                logger.debug("failed closing blocking redis client %s", name)
+        self._blocking_clients.clear()
         if self._closed or self._client is None:
             return
         self._closed = True

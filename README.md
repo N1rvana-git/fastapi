@@ -6,6 +6,7 @@
 
 - 重构说明与对照表：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - 重构报告（含验证记录与面试讲述要点）：[docs/REFACTOR_REPORT.md](docs/REFACTOR_REPORT.md)
+- 真实环境联调（PG+pgvector、Redis、独立 worker）：[docs/REAL-ENV-VERIFICATION.md](docs/REAL-ENV-VERIFICATION.md)
 - 破坏性变更与旧代码清理：[docs/MIGRATION.md](docs/MIGRATION.md)
 - 上线/运维手册：[docs/RUNBOOK.md](docs/RUNBOOK.md)
 - 原始 PDF 已逐条落到代码：见 [架构对照](#与-pdf-建议的逐条对照)
@@ -147,6 +148,10 @@ docker compose logs -f web worker
 ```
 
 `migrate` 是一次性服务，`web` 依赖它成功退出后才启动；迁移永远不会在应用启动命令里执行。
+
+本机没有 Docker 时，也可以用 `scripts/dev_pg_redis.ps1` 拉起独立的 PG(pgvector)+Redis 容器，
+再以三个进程（API / worker / `scripts/dev_llm_stub.py`）完成真实验证，步骤见
+[docs/REAL-ENV-VERIFICATION.md](docs/REAL-ENV-VERIFICATION.md)。
 
 ### 3.3 常用命令
 
