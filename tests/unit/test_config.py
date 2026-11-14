@@ -93,6 +93,20 @@ def test_deepseek_env_aliases_are_resolved(monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.CHAT_MODEL == "deepseek-flash"
 
 
+def test_zhipu_aliases_are_resolved(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ZHIPUAI_API_KEY", raising=False)
+    monkeypatch.setenv("ZHIPU_KEY", "zhipu-test")
+    monkeypatch.setenv("ZHIPU_BASE_URL", "https://gateway.test/v1")
+    settings = Settings(
+        _env_file=None,
+        ENVIRONMENT="test",
+        SECRET_KEY=_LONG_SECRET,
+        DATABASE_URL="sqlite+aiosqlite:///:memory:",
+    )
+    assert settings.ZHIPUAI_API_KEY == "zhipu-test"
+    assert settings.EMBEDDING_BASE_URL == "https://gateway.test/v1"
+
+
 def test_cors_origins_include_documented_frontends() -> None:
     settings = _settings(ENVIRONMENT="development", CORS_ORIGINS="https://a.example")
     assert "https://a.example" in settings.cors_origins

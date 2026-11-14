@@ -124,11 +124,15 @@ class Settings(BaseSettings):
     # DeepSeek has no /embeddings endpoint; this stays a separate provider
     # (Zhipu embedding-2, 1024 dims by default).
     ZHIPUAI_API_KEY: str = Field(
-        default="", validation_alias=AliasChoices("ZHIPUAI_API_KEY", "ZHIPU_API_KEY")
+        default="",
+        validation_alias=AliasChoices("ZHIPUAI_API_KEY", "ZHIPU_API_KEY", "ZHIPU_KEY"),
     )
     ZHIPU_EMBEDDING_MODEL: str = "embedding-2"
     ALLOWED_EMBEDDING_MODELS: str = "embedding-2"
-    EMBEDDING_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
+    EMBEDDING_BASE_URL: str = Field(
+        default="https://open.bigmodel.cn/api/paas/v4",
+        validation_alias=AliasChoices("EMBEDDING_BASE_URL", "ZHIPU_BASE_URL"),
+    )
     EMBEDDING_DIMENSION: int = Field(default=1024, ge=1)
     EMBEDDING_ENABLED: bool = True
 
