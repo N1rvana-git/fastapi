@@ -189,16 +189,20 @@ class ChatService:
                 settings=self.deps.settings,
                 dispatcher=dispatcher,
             )
+
+        fallback = (
+            f"人工审核已通过，订单 #{decision.order_id} 已创建。"
+            if approved and decision.order_id
+            else "人工审核未通过，本次操作已取消。"
+        )
+        content = await self._resume_agent(thread_id, decision, approved=approved, comment=comment)
+        async with self.deps.database.session() as session:
             await self._append_message(
                 session,
                 user_id=user.id,
                 thread_id=thread_id,
                 role="assistant",
-                content=(
-                    f"人工审核已通过，订单 #{decision.order_id} 已创建。"
-                    if approved and decision.order_id
-                    else "人工审核未通过，本次操作已取消。"
-                ),
+                content=(content or fallback)[:8000],
             )
 
         logger.info(
@@ -331,6 +335,37 @@ class ChatService:
         )
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+    async def _resume_agent(
+        self, thread_id: str, decision: Any, *, approved: bool, comment: str | None
+    ) -> str:
+        """Let a stateful runtime finish the suspended turn, if it supports it.
+
+        The purchase has already been executed exactly once by
+        ``approvals.decide``; the graph only needs the decision to continue the
+        conversation, so a runtime failure must not lose the order result.
+        """
+
+        resume = getattr(self.deps.runtime, "resume", None)
+        if not callable(resume):
+            return ""
+        parts: list[str] = []
+        try:
+            async for event in resume(
+                thread_id=thread_id,
+                decision={
+                    "approved": approved,
+                    "order_id": getattr(decision, "order_id", None),
+                    "comment": comment,
+                },
+            ):
+                if event.type == "token":
+                    parts.append(str(event.data.get("text", "")))
+                elif event.type == "error":
+                    parts.append(str(event.data.get("message", "")))
+        except Exception:  # order already persisted above
+            logger.exception("failed to resume agent graph", extra=log_extra(thread_id=thread_id))
+        return "".join(parts).strip()
 
     async def _run_worker(
         self, *, ctx: ChatRequestContext, run_key: str, snapshot: dict[str, str]

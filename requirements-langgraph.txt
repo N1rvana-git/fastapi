@@ -1,0 +1,15 @@
+# Optional LangGraph runtime + PostgreSQL checkpointer.
+#
+#   pip install -r requirements-langgraph.txt
+#   AGENT_RUNTIME=langgraph
+#   POSTGRES_RAW_DSN=postgresql://user:pass@host:5432/db   # psycopg3 DSN
+#
+# Without POSTGRES_RAW_DSN the runtime uses an InMemorySaver (interrupts work,
+# but do not survive a restart). The checkpointer uses its own psycopg pool,
+# physically isolated from the SQLAlchemy business pool.
+langgraph>=0.3,<0.4
+langchain-core>=0.3,<0.4
+langchain-openai>=0.3,<0.4
+langgraph-checkpoint-postgres>=2.0,<3.0
+psycopg[binary]>=3.3,<4.0
+psycopg-pool>=3.2,<4.0

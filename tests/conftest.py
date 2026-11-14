@@ -44,7 +44,12 @@ import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
+from src.app.core.compat import ensure_event_loop_policy  # noqa: E402
 from src.app.core.config import get_settings  # noqa: E402
+
+# psycopg3 (LangGraph checkpointer) cannot use Windows' ProactorEventLoop.
+ensure_event_loop_policy()
+
 from src.app.core.database import Base  # noqa: E402
 from src.app.main import create_app  # noqa: E402
 from src.app.modules.chat.service import ChatDeps, ChatService  # noqa: E402

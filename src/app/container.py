@@ -66,6 +66,7 @@ class AppContainer:
     feishu_crypto: Any = field(init=False)
     started_at: float = field(default_factory=time.monotonic)
     _cleanup_task: asyncio.Task[Any] | None = field(default=None, init=False)
+    _checkpointer: Any | None = field(default=None, init=False)
     _started: bool = field(default=False, init=False)
 
     @classmethod
@@ -115,12 +116,42 @@ class AppContainer:
             vision=self.vision,
             dispatcher=self.dispatcher,
         )
-        self.runtime = NativeAgentRuntime(
+        native_runtime = NativeAgentRuntime(
             gateway=self.llm,
             deps=self.tool_deps,
             max_steps=self.settings.AGENT_MAX_STEPS,
             context_messages=self.settings.AGENT_CONTEXT_MESSAGES,
         )
+        self.runtime = native_runtime
+        if self.settings.AGENT_RUNTIME == "langgraph" or self.settings.LANGGRAPH_ENABLED:
+            try:
+                from src.app.modules.chat.checkpointer import build_checkpointer
+                from src.app.modules.chat.runtime_langgraph import (
+                    LangGraphAgentRuntime,
+                    build_chat_model,
+                )
+
+                self._checkpointer = await build_checkpointer(self.settings)
+                self.runtime = LangGraphAgentRuntime(
+                    settings=self.settings,
+                    model=build_chat_model(self.settings),
+                    deps=self.tool_deps,
+                    checkpointer=self._checkpointer.saver,
+                    max_steps=self.settings.AGENT_MAX_STEPS,
+                )
+                logger.info(
+                    "agent runtime enabled",
+                    extra=log_extra(
+                        event="agent_runtime",
+                        runtime="langgraph",
+                        checkpointer=self._checkpointer.backend,
+                    ),
+                )
+            except Exception:  # optional dependency / config problem
+                logger.exception(
+                    "langgraph runtime unavailable; falling back to the native runtime"
+                )
+                self.runtime = native_runtime
         self.chat_service = ChatService(
             deps=ChatDeps(
                 settings=self.settings,
@@ -168,6 +199,9 @@ class AppContainer:
 
         if hasattr(self, "chat_service"):
             await self.chat_service.shutdown(grace_seconds=10.0)
+        if self._checkpointer is not None:
+            await self._checkpointer.aclose()
+            self._checkpointer = None
         if hasattr(self, "dispatcher"):
             await self.dispatcher.aclose()
         await self.http.close()

@@ -70,4 +70,7 @@ async def main() -> int:
 
 
 if __name__ == "__main__":  # pragma: no cover - process entry point
+    from src.app.core.compat import ensure_event_loop_policy
+
+    ensure_event_loop_policy()
     sys.exit(asyncio.run(main()))

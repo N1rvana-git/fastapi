@@ -16,7 +16,7 @@
 模块化单体 + 严格分层 + 全链路异步 + 纯 ASGI 中间件 + lifespan 资源治理 + 领域异常 + 幂等/限流 +
 可降级基础设施 + Redis Stream 任务队列与 SSE 缓冲 + HITL 审批 + 结构化日志/探针 + 质量门禁。
 
-结果：108 个测试全绿；`alembic upgrade/downgrade` 双向通过（含 SQLite）；真实 uvicorn 冒烟通过；
+结果：113 个测试全绿（1 个需要真实 PostgreSQL 的用例默认跳过）；`alembic upgrade/downgrade` 双向通过；
 文档化改造点与差距。
 
 ---
@@ -82,8 +82,8 @@
 
 | 项目 | 命令 | 结果 |
 | --- | --- | --- |
-| 单元 + 集成测试 | `pytest tests -q` | **108 passed**（约 100s；SQLite 内存库、无 Redis、无外部网络） |
-| 覆盖率 | `pytest --cov=src/app` | **约 68%**（CI 门禁 60%） |
+| 单元 + 集成测试 | `pytest tests -q` | **113 passed, 1 skipped**（跳过项需要 `POSTGRES_RAW_DSN`） |
+| 覆盖率 | `pytest --cov=src/app` | **约 70%**（CI 门禁 60%） |
 | Lint | `ruff check src tests` | **All checks passed**（0 告警） |
 | 格式 | `ruff format --check src tests` | 92 files already formatted |
 | 类型检查 | `mypy src/app` | **Success: no issues found in 72 source files** |
@@ -91,7 +91,7 @@
 | 迁移升级 | `alembic upgrade head`（SQLite） | 通过，`agent_approvals/favourites` 与新增列齐全 |
 | 迁移回滚 | `alembic downgrade base` | 通过，干净回退 |
 | 本地库重建 | 删除指向 `242a197b6cf6` 的 `test.db` 后重建 | 版本 `b2f4c7d91a30`，10 张表齐全 |
-| 依赖锁定 | `uv lock` / `uv lock --check` | `uv.lock`（112 包）一致 |
+| 依赖锁定 | `uv lock` / `uv lock --check` | `uv.lock`（144 包，含可选 extra）一致 |
 | 真实服务冒烟 | `uvicorn src.main:app`（SQLite + 无 Redis） | `/health/live` 200、`/health/ready` 200、注册/登录/建商品/列表 全部正常 |
 | SSE 冒烟 | `POST /items/ai/agent/stream` | 200，返回 `event: error`（无有效 LLM key），SSE 头与帧格式正确 |
 | 配置一致性 | `.env.example` vs `Settings.model_fields` | 无未知/缺失键 |
@@ -111,7 +111,7 @@
 | --- | --- | --- |
 | 最大单文件行数 | 932（posts/router.py） | ~374（items/router.py，且只做 HTTP 编排） |
 | 导入应用耗时 | 受 600MB 模型下载/加载支配 | 毫秒级（模型懒加载） |
-| 自动化测试 | 名义存在、实际失效 | 108 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密 |
+| 自动化测试 | 名义存在、实际失效 | 113 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密/LangGraph |
 | 交易链路 | 必然 500 | 可下单、可重复请求重放、防超卖 |
 | 收藏功能 | 必然 500 | 可用（新增关联表） |
 | 权限提升 | 匿名可注册 admin | 默认禁止，管理员 API 才能改角色 |
@@ -122,9 +122,9 @@
 
 ## 6. 未完成与风险（面试时主动说）
 
-1. 覆盖率约 68%，距核心模块 80% 目标仍有差距（下一步补 SSE/网关/视觉降级路径的测试）。
-2. HITL 用业务库审批表代替 LangGraph checkpointer：语义等价但**没有**多步图快照回溯；
-   未来接入 LangGraph 时保留审批表作为事实来源。
+1. 覆盖率约 70%，距核心模块 80% 目标仍有差距（下一步补 SSE/网关/视觉降级路径的测试）。
+2. LangGraph 运行时已接入（可选），但 checkpoint 的 time-travel 回滚尚未实现；
+   审批表仍是业务事实来源，两种运行时共用同一套 HITL 闭环。
 3. 无 Redis 时幂等/限流/锁退化为进程内，多副本场景必须 Redis（`REDIS_REQUIRED=true`）。
 4. `users.email` 已由迁移 `d4b7e2a9c1f0` 加 `lower(email)` 唯一索引（重复邮箱自动归档为 `+dup<id>`）；
    历史数据仍需人工确认归档账号的归属。
@@ -148,9 +148,9 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 4. 然后做**协作型能力**：Redis Stream 事件缓冲 + Last-Event-ID 续传 + 会话锁 + 三层背压 +
    人工审批状态机（金额超阈值挂起、幂等恢复、超时清理）；
 5. 最后做**工程闭环**：lifespan 资源治理、纯 ASGI 中间件、JSON 日志 + trace_id、双探针、
-   alembic 双向迁移、Docker/compose/CI/pre-commit、108 个测试。
+   alembic 双向迁移、Docker/compose/CI/pre-commit、113 个测试。
 
-**Result**：108 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
+**Result**：113 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
 防超卖"；新增能力（幂等、限流、SSE 续传、HITL）都有对应测试与文档。
 
 **可能的追问**：
@@ -164,7 +164,7 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 
 ## 8. 下一步 30/60/90
 
-- **30 天**：覆盖率从 68% 提到核心模块 80%；补 `pip-audit`/Dependabot；补 SSE/网关/降级路径测试；
+- **30 天**：覆盖率从 70% 提到核心模块 80%；补 `pip-audit`/Dependabot；补 SSE/网关/降级路径测试；
 - **60 天**：接入 OpenTelemetry + Prometheus/Grafana 面板与分级告警；压测出 P95/P99；
   飞书签名校验；`email` 唯一索引（先清洗数据）；
 - **90 天**：多副本故障演练（Redis/DB/LLM 故障注入）；按需接入 LangGraph/Temporal 处理复杂长流程；
@@ -190,8 +190,8 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 - 删除了 `API_KEy` 拼写别名（`API_KEY` 仍兼容），消除 Ruff SIM112，并同步测试与文档；
 - `_pdf_extract.txt`、`mypy_before.txt` 等临时产物已清理。
 
-复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 108 passed、
-覆盖率约 68%、干净 SQLite 迁移 up/down 通过。
+复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 113 passed、
+覆盖率约 70%、干净 SQLite 迁移 up/down 通过。
 
 ---
 
@@ -208,3 +208,32 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 新增测试：`tests/integration/test_migrations.py`（真实 Alembic 子进程）、
 `tests/unit/test_feishu_security.py`、`tests/integration/test_feishu_encrypted.py`、
 `tests/integration/test_auth_users.py::test_email_uniqueness_is_enforced_by_the_database`。
+
+---
+
+## 11. 0.2.3 LangGraph 状态机（方向 3）
+
+把 PDF Part 3 的方案真正落地为可选运行时，而不是伪代码：
+
+| 能力 | 实现 |
+| --- | --- |
+| 图状态机 | `chat/runtime_langgraph.py`：`chatbot ↔ tools`，`steps` 上限、条件边、`AGENT_MAX_STEPS` |
+| 动态挂起 | `create_order` 抛 `ApprovalRequiredError` → 幂等落审批表 → `interrupt(payload)` |
+| 恢复 | `/resume` 先由审批服务执行一次下单，再 `Command(resume={approved, order_id})` 让模型继续对话 |
+| 持久化 | `chat/checkpointer.py`：独立 psycopg3 `AsyncConnectionPool` + `AsyncPostgresSaver`（`autocommit`, `dict_row`, `prepare_threshold=0`） |
+| 降级 | 未安装 langgraph / 未配置 DSN → 自动回退 native；DSN 为空时用 `InMemorySaver` |
+| 装配 | `AGENT_RUNTIME=langgraph`（或 `LANGGRAPH_ENABLED=true`）；停机时先 drain 图再关池 |
+| Windows 兼容 | `core/compat.py`：psycopg3 异步要求 Selector 事件循环，入口/测试统一切换 |
+
+验证：
+
+- **5 个 LangGraph 测试**（`tests/unit/test_langgraph_runtime.py`）：高额下单触发 interrupt、
+  审批通过后 resume 继续对话且库存只扣一次、拒绝分支、挂起期间新消息 409、
+  `ChatService.resume` 驱动图、容器按配置选择运行时；
+- **真实 PG checkpointer 测试**（`tests/integration/test_langgraph_pg.py`，默认 skip）：
+  在 `pgvector/pgvector:pg15` 容器上创建两个独立 checkpointer 句柄，第二个句柄能读到第一个写入的
+  checkpoint，证明状态在 PostgreSQL 而非内存（`1 passed` when `POSTGRES_RAW_DSN` is set）；
+- 安全边界：图只负责"告知模型结果"，下单仍由审批服务唯一执行，避免双写/重复扣库存。
+
+未实现：checkpoint 的 time-travel 回滚（`aget_state_history` + `aupdate_state`）、
+LangGraph 运行时的 `tool_start/tool_end` 事件（native 运行时才有，SSE 契约其余部分一致）。

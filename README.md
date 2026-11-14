@@ -28,10 +28,10 @@
 | 流式 | SSE 裸生成器，无心跳/重连/缓冲控制，长事务持有 DB 连接 | Redis Stream 事件缓冲 + `Last-Event-ID` 续传 + 心跳 + 断线策略 + 短会话 |
 | 异步任务 | Celery（同步 worker，与 async 应用割裂） | 自研 async 任务队列（Redis Stream consumer group + 重试/死信/优雅停机） |
 | 安全 | 匿名可注册为 `admin`；JWT 密钥默认空；上传用原始文件名（路径穿越） | 角色提升受控；密钥启动强校验；uuid 文件名 + 魔数校验 + 大小限制；CORS 白名单 |
-| 质量 | flake8 且 `\|\| true`，测试互相覆盖、断言错 | 108 个测试（unit + integration），ruff/mypy/pre-commit/CI 门禁，迁移双向验证 |
+| 质量 | flake8 且 `\|\| true`，测试互相覆盖、断言错 | 113 个测试（unit + integration），ruff/mypy/pre-commit/CI 门禁，迁移双向验证 |
 
-> 说明：`pytest`（108 passed）、`ruff check`、`ruff format --check`、`mypy src/app`、真实 uvicorn 冒烟、
-> `alembic upgrade/downgrade` 与 `uv lock` 均已在本机实测通过；覆盖率约 68%（CI 门禁 60%）。
+> 说明：`pytest`（113 passed / 1 skipped）、`ruff check`、`ruff format --check`、`mypy src/app`、真实 uvicorn 冒烟、
+> `alembic upgrade/downgrade` 与 `uv lock` 均已在本机实测通过；覆盖率约 70%（CI 门禁 60%）。
 > Docker 镜像构建需要可用的 Docker daemon，尚未在本机完成。
 
 ---
@@ -156,13 +156,22 @@ docker compose logs -f web worker
 ### 3.3 常用命令
 
 ```bash
-make test        # pytest（108 项）
+make test        # pytest（113 项）
 make lint        # ruff check
 make format      # ruff format
 make typecheck   # mypy（CI 硬门禁）
 make migrate     # alembic upgrade head
 make worker      # 启动异步 worker
 make admin EMAIL=you@example.com   # 把已有账号提升为管理员
+```
+
+可选能力：
+
+```bash
+pip install -r requirements-langgraph.txt   # LangGraph 运行时 + PG checkpointer
+# .env: AGENT_RUNTIME=langgraph
+#       POSTGRES_RAW_DSN=postgresql://user:pass@host:5432/db   (psycopg3 DSN)
+pip install -r requirements-ai.txt          # CN-CLIP 视觉 + Playwright 比价
 ```
 
 ---
@@ -283,12 +292,12 @@ Agent 调用 create_order → 金额 >= AGENT_APPROVAL_THRESHOLD
 ruff check src/app tests          # lint
 ruff format --check src/app tests # 格式
 mypy src/app                      # 类型检查（0 errors，CI 硬门禁）
-pytest --cov                      # 108 个测试 + 覆盖率（约 68%）
+pytest --cov                      # 113 个测试 + 覆盖率（约 70%）
 alembic upgrade head && alembic downgrade base   # 迁移可上可下
 ```
 
 CI（`.github/workflows/ci.yml`）：lint/format/mypy/测试与覆盖率均为硬门禁 → 迁移双向验证 →
-镜像构建推送（仅 push）。本机 0.2.1 实测：ruff 0 告警、mypy 0 错误、108 测试全绿、覆盖率约 68%。
+镜像构建推送（仅 push）。本机 0.2.1 实测：ruff 0 告警、mypy 0 错误、113 测试全绿、覆盖率约 70%。
 
 ---
 
@@ -307,7 +316,7 @@ CI（`.github/workflows/ci.yml`）：lint/format/mypy/测试与覆盖率均为�
 | SSE 幂等三态 + Redis Stream 续传 + Watchdog 锁 | `chat/service.py`、`chat/stream.py` |
 | 三层背压（会话锁 / 用户配额 / 上游信号量） | `ThreadLockManager`、`rate_limit()`、`LLMGateway.Semaphore` |
 | 断线策略 A/B | `AGENT_DISCONNECT_POLICY` + `chat/service.py` |
-| Checkpointer 双池隔离 | `docs/ARCHITECTURE.md` §6.4：HITL 改为持久化审批表（无 langgraph 依赖），并给出可选扩展点 |
+| Checkpointer 双池隔离 | `chat/checkpointer.py`：独立 psycopg3 池 + `AsyncPostgresSaver`；`AGENT_RUNTIME=langgraph` 启用 |
 | 僵尸 HITL 清理 | `chat/tasks.expire_approvals` + 生命周期定时任务 |
 | State 载荷瘦身 | 工具输出截断、历史窗口 `AGENT_CONTEXT_MESSAGES`、消息落库截断 8000 字符 |
 | 5 条质量门禁 | `.github/workflows/ci.yml`、`pyproject.toml`、`tests/` |

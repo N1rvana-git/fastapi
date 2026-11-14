@@ -41,6 +41,7 @@
 | 15 | 重复审批 | 再次 `resume` | ✅ 409，未重复扣库存 |
 | 16 | pgvector 语义检索 | 写入 1024 维向量后 `cosine_distance` 排序 | ✅ 相似向量排第一（1.0），正交向量 0.031 |
 | 17 | 邮箱唯一索引（方向 2） | `alembic upgrade head` → `d4b7e2a9c1f0`，插入 `SELLER@example.com` | ✅ 索引 `users_email_lower_key` 生效，大小写重复被 PG 拒绝 |
+| 18 | LangGraph PG checkpointer（方向 3） | `POSTGRES_RAW_DSN=... pytest tests/integration/test_langgraph_pg.py` | ✅ `1 passed`：独立 psycopg 池创建成功，第二个 runtime 句柄读到同一 checkpoint |
 
 数据库侧的最终状态（摘要）：
 

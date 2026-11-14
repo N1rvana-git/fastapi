@@ -232,9 +232,8 @@ for step in 1..AGENT_MAX_STEPS:
 - 工具输出截断到 1600 字符（控制上下文与费用）；
 - 每次工具调用生成确定性幂等键 `tool:{thread_id}:{tool_call_id}`，重试不会重复下单。
 
-`AGENT_RUNTIME=langgraph` 为预留扩展点：LangGraph 的 `interrupt()`/checkpointer 与本项目
-"持久化审批表"是两种实现，当前默认 native（依赖不在基线镜像中）。参考实现见
-`docs/ARCHITECTURE.md` §6.4 与 `MIGRATION.md` 的"未来工作"。
+`AGENT_RUNTIME=langgraph` 会启用真正的 LangGraph 状态机（checkpointer + `interrupt()` +
+`Command(resume=...)`），详见 §6.4；默认 `native` 不引入额外依赖。
 
 > 边界说明（0.2.1）：`chat/service.py` 不 import FastAPI。它返回与传输无关的
 > `ChatRun(events: AsyncIterator[str], headers, media_type)`，断线探测以
@@ -290,23 +289,36 @@ stateDiagram-v2
 - 上下文窗口固定 `AGENT_CONTEXT_MESSAGES`（默认 8），不把整段 RAG 原文塞进历史；
 - SSE buffer `MAXLEN ~ 2000` + TTL 600s，不会无限增长。
 
-### 6.4 与 PDF 的 LangGraph 方案对照
+### 6.4 两套 Agent 运行时：native 与 LangGraph
 
-PDF §3 使用 `AsyncPostgresSaver` + 独立 psycopg3 连接池 + `interrupt()`。本项目的取舍：
+项目现在**同时提供**两种运行时，通过 `AGENT_RUNTIME` 选择，接口一致（`AgentRuntime` 协议：
+`run(...) -> AsyncIterator[AgentEvent]`），SSE/审批/历史/飞书复用同一套外层逻辑：
 
-| PDF 方案 | 本项目 | 原因 |
+| 能力 | `native`（默认） | `langgraph`（可选 extra） |
 | --- | --- | --- |
-| LangGraph checkpointer 双池 | 审批表 + 会话历史表（业务库） | 当前依赖基线不含 langgraph/langgraph-checkpoint-postgres；审批只需持久化"待决策动作"，不需要完整图快照 |
-| `interrupt()` 动态挂起 | `ApprovalRequiredError` → 落库 → `interrupt_required` 事件 | 与现有 SSE/工具层解耦，native runtime 也能用 |
-| `Command(resume=...)` | `POST /threads/{id}/resume` 执行已存动作 | 语义等价：校验挂起→决策→执行→幂等 |
-| Checkpoint 时travel 回滚 | 未实现（订单有补偿/取消状态字段可扩展） | 需求未出现"回滚已发生的多步图状态" |
+| 工具循环 | 自研有界循环（`AGENT_MAX_STEPS`） | LangGraph `StateGraph` + 条件边 |
+| 持久化 | 业务库 `ai_chat_records` | `AsyncPostgresSaver`（独立 psycopg 池）/ `InMemorySaver` |
+| 动态挂起 | `ApprovalRequiredError` → 审批表 → `interrupt_required` 事件 | 同样的审批表 + LangGraph `interrupt()` |
+| 恢复 | `resume` 只落审批结果 | `Command(resume=...)` 继续图，模型接着说话 |
+| 依赖 | 无额外依赖 | `langgraph` + `langgraph-checkpoint-postgres`（`pip install -r requirements-langgraph.txt`） |
 
-需要完整 LangGraph 时：安装 `langgraph` + `langgraph-checkpoint-postgres`，实现
-`AgentRuntime` 协议（`run(...) -> AsyncIterator[AgentEvent]`），把 `interrupt_required` 事件与
-现有审批表对接即可；lifespan 中按 PDF 的"双池物理隔离"建独立 `AsyncConnectionPool`
-（`autocommit=True, row_factory=dict_row, prepare_threshold=0`），并在停机时先 drain worker
-再关池。本项目已在 `Settings` 预留 `LANGGRAPH_ENABLED` / `POSTGRES_RAW_DSN` /
-`CHECKPOINTER_POOL_MIN/MAX`。
+实现要点（`chat/runtime_langgraph.py`、`chat/checkpointer.py`）：
+
+- **双池物理隔离**：checkpointer 使用独立 `AsyncConnectionPool`（`autocommit=True`,
+  `row_factory=dict_row`, `prepare_threshold=0`），与 SQLAlchemy 业务池完全分离；
+  `POSTGRES_RAW_DSN` 使用 psycopg3 的 `postgresql://`（不能带 `+asyncpg`）。
+- **业务事实来源仍是审批表**：节点捕获 `ApprovalRequiredError` 后幂等落库并 `interrupt()`；
+  HTTP `/resume` 先由审批服务**执行一次**下单，再用 `order_id` 恢复图，图只负责把结果告诉模型。
+  这样不存在第二条会重复扣库存的路径。
+- **节点可重入**：`interrupt()` 恢复时节点从头重跑，`request_approval` 以
+  (thread, action, payload) 幂等，下单闸门在扣库存之前，重复执行无副作用。
+- **状态机守卫**：会话存在 pending interrupt 时，新消息直接 `409`，避免破坏 checkpoint 树。
+- **停机顺序**：先 drain 在跑的图，再关闭 checkpointer 池（见 `container.shutdown`）。
+- **Windows 开发**：psycopg3 异步连接不支持 ProactorEventLoop，`src/main.py` / `src/worker.py` /
+  tests 在 Windows 上切换到 `WindowsSelectorEventLoopPolicy`（`core/compat.py`）。
+
+尚未实现：checkpoint 的 time-travel 回滚（PDF 的 `aget_state_history` + `aupdate_state`），
+以及多副本共享 checkpointer 的压测。当前审批表已覆盖"挂起 → 决策 → 幂等执行 → 继续对话"闭环。
 
 ---
 
@@ -340,14 +352,14 @@ PDF §3 使用 `AsyncPostgresSaver` + 独立 psycopg3 连接池 + `interrupt()`�
 
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
-| `uv.lock` 实际锁定 | 已生成 | `uv.lock`（112 包）已提交，`uv lock --check` 通过 |
+| `uv.lock` 实际锁定 | 已生成 | `uv.lock`（144 包，含可选 LangGraph extra）已提交，`uv lock --check` 通过 |
 | `structlog` | 未使用 | 依赖未引入；自研 JSON formatter 覆盖相同能力，缺 `bind()` 链式 API |
 | OpenTelemetry 链路追踪 | 未接入 | 无 SDK；保留 `trace_id` 上下文与中间件挂载点，接入成本低 |
 | `mypy` 严格配置全绿 | 已达成（0.2.1） | `mypy src/app` → 0 errors，CI 已移除 `continue-on-error` |
-| 覆盖率 ≥80%（核心模块） | 未达成 | 当前约 68%；CI 门禁 60%，逐步提升 |
+| 覆盖率 ≥80%（核心模块） | 未达成 | 当前约 70%；CI 门禁 60%，逐步提升 |
 | Granian / uvloop | 未启用 | 镜像默认 uvicorn；Granian 是可选替换（见 RUNBOOK） |
 | Temporal / Taskiq | 未引入 | 自研 Redis Stream 队列满足当前规模；复杂长流程再引入 |
-| LangGraph checkpointer | 未接入 | 见 §6.4；0.2.x 计划接入（双池 + interrupt/resume） |
+| LangGraph runtime + checkpointer | 已接入（可选） | `AGENT_RUNTIME=langgraph`，独立 psycopg 池；真实 PG 测试通过，见 §6.4 |
 | 多机房/容灾演练 | 未涉及 | 超出单项目范围 |
 | `pip-audit` / Dependabot | 未启用 | 建议在 GitHub 打开 Dependabot |
 
@@ -362,7 +374,7 @@ PDF §3 使用 `AsyncPostgresSaver` + 独立 psycopg3 连接池 + `interrupt()`�
 | 架构设计合理性 | 4 | 模块化单体、单向依赖、组合根、领域异常 | 用 `import-linter` 把分层规则变成 CI 门禁 |
 | 性能与可扩展性 | 4 | 全异步、连接池、两级缓存、原子 UPDATE、SSE 背压 | 压测（locust/k6）出 P95；大列表引入 keyset 分页 |
 | 服务治理与稳定性 | 3 | 限流/超时/重试/退避、会话锁、审批超时、优雅停机 | 熔断器（半开/关闭）与降级开关；多副本演练 |
-| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、108 测试、uv.lock、迁移双向 | 覆盖率 80%、依赖审计 |
+| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、113 测试、uv.lock、迁移双向 | 覆盖率 80%、依赖审计 |
 | 可观测性 | 3 | JSON 日志 + trace_id + 双探针 + 可选指标 | 接入 OTel/Prometheus + Grafana 面板与分级告警 |
 | 安全与合规 | 4 | JWT/密码/RBAC/上传/CORS/错误脱敏 | `pip-audit`、限流分级、敏感字段脱敏展示 |
 | 业务适配与演进能力 | 4 | 新增域只需加目录；任务/工具/审批即插即用 | 写 ADR、补 API 契约测试（Schemathesis） |
@@ -376,8 +388,9 @@ PDF §3 使用 `AsyncPostgresSaver` + 独立 psycopg3 连接池 + `interrupt()`�
 
 1. **自研 async 任务队列而非 Celery**：Celery 的同步 worker 模型与全异步栈割裂（PDF 观点）；
    当前规模只需要"至少一次 + 重试 + 死信"，Redis Stream 足够，且有 in-process 降级便于测试。
-2. **HITL 用审批表而非 LangGraph checkpointer**：不引入基线与镜像外依赖，语义等价，且可被
-   非 LangGraph 的 native runtime 复用；未来接入 LangGraph 时审批表仍是业务事实来源。
+2. **HITL 以审批表为业务事实来源，LangGraph 作为可选状态机**：native 与 langgraph 两种运行时
+   共用同一审批闭环；LangGraph 负责图快照与 `interrupt/resume`，审批表负责"谁在何时批准了什么"。
+   这样 native 部署不引入额外依赖，需要长流程时可平滑切换。
 3. **条件 UPDATE 代替行锁**：跨方言正确（SQLite 行锁无效），一步完成"检查 + 扣减"。
 4. **Redis 可选**：中小部署常只有单实例；缺 Redis 时功能降级而不是拒绝启动，
    但 `REDIS_REQUIRED=true` 可强制生产就绪语义。

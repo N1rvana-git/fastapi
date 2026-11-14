@@ -135,6 +135,7 @@ nginx.ingress.kubernetes.io/proxy-body-size: "12m"
 | 清理某会话流 | `redis-cli DEL chat:stream:<thread_id>` |
 | 查看锁 | `redis-cli GET chat:lock:<thread_id>` |
 | 清理僵尸审批 | 定时任务自动执行；手动：调用 `chat.expire_approvals` 或 SQL 置 `expired` |
+| 启用 LangGraph | `pip install -r requirements-langgraph.txt`；`AGENT_RUNTIME=langgraph`；`POSTGRES_RAW_DSN=postgresql://...`（psycopg3，不能带 `+asyncpg`） |
 
 ---
 
@@ -199,6 +200,20 @@ redis-cli XINFO GROUPS xianxiaobao:tasks      # pending / consumers
 - `terminationGracePeriodSeconds` 太短：Agent 一轮可能 30–60s；
 - 本项目在 shutdown 时 drain 在跑的 Agent 任务（默认 10s 后取消），
   对应把 grace period 设为 ≥ 60s，并配置 `preStop sleep 10`。
+
+### 5.10 LangGraph checkpointer 故障
+
+- **启动日志 `pool initialization incomplete`**：检查 `POSTGRES_RAW_DSN` 是否为 psycopg3 DSN
+  （`postgresql://`，不能 `postgresql+asyncpg://`）、PG 是否允许该账号连接；
+  checkpointer 使用独立连接池，与业务 SQLAlchemy 池分开排查。
+- **Windows 本地开发报 `Psycopg cannot use the 'ProactorEventLoop'`**：已由 `core/compat.py`
+  在入口切换 Selector 策略；自写脚本调用 checkpointer 时需先调用 `ensure_event_loop_policy()`。
+- **重启后审批恢复失败**：`POSTGRES_RAW_DSN` 为空时使用 `InMemorySaver`，图状态不跨进程；
+  生产必须配置真实 PG DSN。
+- **挂起期间发送新消息返回 409**：这是设计行为（避免破坏 checkpoint 树），先调用
+  `POST /items/ai/threads/{id}/resume` 处理审批。
+- checkpointer 表（`checkpoints*`）由 `AsyncPostgresSaver.setup()` 首次启动自动创建；
+  清理历史线程时可删除对应 `thread_id` 的行，或在业务侧做定期归档。
 
 ---
 

@@ -21,11 +21,13 @@ ENV PIP_NO_CACHE_DIR=1 \
 COPY --from=ghcr.io/astral-sh/uv:0.4.30 /uv /bin/uv
 
 WORKDIR /app
-COPY requirements.txt requirements-ai.txt ./
+COPY requirements.txt requirements-ai.txt requirements-langgraph.txt ./
 
 ARG INSTALL_AI=0
+ARG INSTALL_LANGGRAPH=0
 RUN uv pip install --system -r requirements.txt \
-    && if [ "$INSTALL_AI" = "1" ]; then uv pip install --system -r requirements-ai.txt; fi
+    && if [ "$INSTALL_AI" = "1" ]; then uv pip install --system -r requirements-ai.txt; fi \
+    && if [ "$INSTALL_LANGGRAPH" = "1" ]; then uv pip install --system -r requirements-langgraph.txt; fi
 
 COPY . .
 RUN python -m compileall -q src

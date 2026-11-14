@@ -163,6 +163,7 @@ alembic downgrade -1          # 回到 c924f1debfb5
 - `requirements.txt` 从"pip freeze 全量导出（含 torch/CUDA/Jupyter）"改为**分层清单**：
   - `requirements.txt`：运行时基线（无 torch）
   - `requirements-ai.txt`：可选 AI/浏览器
+  - `requirements-langgraph.txt`：可选 LangGraph + PG checkpointer
   - `requirements-dev.txt`：测试与 lint
 - Dockerfile：多阶段构建、非 root、`HEALTHCHECK`、**不在 CMD 里跑迁移**；
   AI 依赖通过 `--build-arg INSTALL_AI=1` 可选安装。
@@ -190,8 +191,9 @@ alembic downgrade -1          # 回到 c924f1debfb5
 
 ## 7. 未来工作（与本文档相邻）
 
-- 生成并提交 `uv.lock`（本机离线无法生成）；
-- 覆盖率从 60% 门槛逐步提高到核心模块 80%（当前约 68%）；
+- 覆盖率从 60% 门槛逐步提高到核心模块 80%（当前约 70%）；
 - 接入 OpenTelemetry（保留 `trace_id` 上下文即可低成本挂载）；
-- 如需完整 LangGraph 状态机：安装 `langgraph` + `langgraph-checkpoint-postgres`，
-  实现 `AgentRuntime` 协议，并在 lifespan 中按"双池隔离"建 checkpointer 连接池。
+- LangGraph 已作为可选运行时提供：`pip install -r requirements-langgraph.txt`，
+  设置 `AGENT_RUNTIME=langgraph` 与 `POSTGRES_RAW_DSN`（psycopg3 DSN）即可启用；
+  checkpointer 使用独立连接池，详见 `docs/ARCHITECTURE.md` §6.4。
+- 如需 checkpoint time-travel 回滚（`aget_state_history` + `aupdate_state`），在 LangGraph 运行时上扩展。
