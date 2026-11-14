@@ -47,8 +47,10 @@ from httpx import ASGITransport, AsyncClient  # noqa: E402
 from src.app.core.compat import ensure_event_loop_policy  # noqa: E402
 from src.app.core.config import get_settings  # noqa: E402
 
-# psycopg3 (LangGraph checkpointer) cannot use Windows' ProactorEventLoop.
-ensure_event_loop_policy()
+# Only the PostgreSQL checkpointer test needs psycopg3's selector loop on
+# Windows; switching globally would slow the default Proactor-based test runs.
+if os.getenv("POSTGRES_RAW_DSN"):
+    ensure_event_loop_policy()
 
 from src.app.core.database import Base  # noqa: E402
 from src.app.main import create_app  # noqa: E402

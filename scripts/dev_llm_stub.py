@@ -11,6 +11,9 @@ Run it next to the API and point ``CHAT_BASE_URL`` at it:
 It streams a deterministic answer (and, when the request contains tool results,
 a short acknowledgement), which is enough to exercise the gateway, the SSE
 buffer, idempotent replay and the agent loop plumbing.
+
+``--chunks``/``--delay`` make streams deliberately slow so load tests can hold
+many SSE connections open at the same time.
 """
 
 from __future__ import annotations
@@ -22,6 +25,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 _CHUNKS = ["你好", "，我是", "闲小宝", "（stub）", "。"]
 _TOOL_CHUNKS = ["已收到", "工具结果", "，正在", "整理回答。"]
+
+_CHUNK_COUNT = 5
+_CHUNK_DELAY = 0.02
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -39,7 +45,8 @@ class Handler(BaseHTTPRequestHandler):
             payload = {}
         messages = payload.get("messages") or []
         has_tool_result = any(message.get("role") == "tool" for message in messages)
-        chunks = _TOOL_CHUNKS if has_tool_result else _CHUNKS
+        base = _TOOL_CHUNKS if has_tool_result else _CHUNKS
+        chunks = [base[index % len(base)] for index in range(_CHUNK_COUNT)]
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -55,19 +62,35 @@ class Handler(BaseHTTPRequestHandler):
             }
             self.wfile.write(f"data: {json.dumps(frame, ensure_ascii=False)}\n\n".encode())
             self.wfile.flush()
-            time.sleep(0.02)
+            time.sleep(_CHUNK_DELAY)
         self.wfile.write(b"data: [DONE]\n\n")
         self.wfile.flush()
         self.close_connection = True
 
 
+class StubServer(ThreadingHTTPServer):
+    # socketserver's default backlog is 5, which makes 50 concurrent SSE
+    # connections fail and look like an LLM outage. Raise it for load tests.
+    daemon_threads = True
+    request_queue_size = 256
+
+
 def main() -> None:
+    global _CHUNK_COUNT, _CHUNK_DELAY
+
     parser = argparse.ArgumentParser(description="OpenAI-compatible SSE stub")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8125)
+    parser.add_argument("--chunks", type=int, default=5, help="number of streamed chunks")
+    parser.add_argument("--delay", type=float, default=0.02, help="seconds between chunks")
     args = parser.parse_args()
-    server = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"LLM stub listening on http://{args.host}:{args.port}/v1/chat/completions")
+    _CHUNK_COUNT = max(1, args.chunks)
+    _CHUNK_DELAY = max(0.0, args.delay)
+    server = StubServer((args.host, args.port), Handler)
+    print(
+        f"LLM stub listening on http://{args.host}:{args.port}/v1/chat/completions "
+        f"(chunks={_CHUNK_COUNT}, delay={_CHUNK_DELAY}s)"
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

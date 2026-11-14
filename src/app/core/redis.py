@@ -61,7 +61,7 @@ class RedisManager:
             self.settings.REDIS_URL,
             encoding="utf-8",
             decode_responses=True,
-            max_connections=4,
+            max_connections=self.settings.REDIS_BLOCKING_MAX_CONNECTIONS,
             socket_timeout=socket_timeout,
             socket_connect_timeout=self.settings.REDIS_SOCKET_TIMEOUT,
             health_check_interval=30,

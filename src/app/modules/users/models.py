@@ -46,13 +46,17 @@ class UserModel(Base):
         "ItemModel",
         back_populates="owner",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        # Deliberately NOT eager: loading a user must never drag in every listing
+        # they own (and then every listing's owner again). That "selectin
+        # explosion" made a single /buy take seconds once the perf data grew.
+        # Load explicitly when a use case really needs it.
+        lazy="raise",
     )
     favourites: Mapped[list[ItemModel]] = relationship(
         "ItemModel",
         secondary="favourites",
         back_populates="favourited_by",
-        lazy="selectin",
+        lazy="raise",
     )
 
     @property

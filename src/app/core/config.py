@@ -69,7 +69,13 @@ class Settings(BaseSettings):
 
     # -------------------------------------------------------------- redis
     REDIS_URL: str = "redis://127.0.0.1:6379/0"
-    REDIS_MAX_CONNECTIONS: int = Field(default=20, ge=1, le=500)
+    # Shared pool for rate limiting, idempotency and task enqueue. Every request
+    # performs at least one Redis command, so keep this close to the expected
+    # concurrent request count (the old default of 20 failed at 50 SSE streams).
+    REDIS_MAX_CONNECTIONS: int = Field(default=100, ge=1, le=2000)
+    # Each open SSE stream occupies one blocking Redis connection (XREAD BLOCK),
+    # so this pool must be sized for the expected number of concurrent streams.
+    REDIS_BLOCKING_MAX_CONNECTIONS: int = Field(default=100, ge=4, le=2000)
     REDIS_SOCKET_TIMEOUT: float = Field(default=1.0, gt=0)
     REDIS_REQUIRED: bool = False  # when True, readiness fails if Redis is down
     CACHE_TTL_SECONDS: int = Field(default=60, ge=0)

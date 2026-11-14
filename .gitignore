@@ -75,3 +75,6 @@ ci_migrations.db
 # Refactor scratch artifacts
 _pdf_extract.txt
 *.db-journal
+
+# Load-test artifacts (see docs/LOAD-TEST-REPORT.md)
+.perf/

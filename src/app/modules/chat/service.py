@@ -554,7 +554,9 @@ class ChatService:
         record = ChatRecord(user_id=user_id, thread_id=thread_id, role=role, content=content)
         session.add(record)
         await session.commit()
-        await session.refresh(record)
+        # expire_on_commit=False keeps the inserted row usable; calling refresh()
+        # here would explode if the session was closed concurrently (seen as a
+        # flaky "Could not refresh instance" in the Feishu webhook tests).
         return record
 
     async def _safe_append(self, thread_id: str, event: str, data: dict[str, Any]) -> None:
