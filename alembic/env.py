@@ -1,94 +1,79 @@
+"""Alembic environment.
+
+Key points:
+
+* the URL comes from the validated application settings (single source of truth);
+* **every** model module is imported before ``target_metadata`` is read, so
+  autogenerate sees the complete schema;
+* ``compare_type`` is enabled to catch silent type drift (``VARCHAR(20)`` ->
+  ``TEXT``);
+* migrations run in their own process/step, never from the app container start.
+
+Run via ``alembic upgrade head`` in CI/CD or a Kubernetes Job - not in the
+Dockerfile ``CMD`` (N replicas racing the same migration corrupts the schema).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import sys
 from logging.config import fileConfig
-from src.database import Base
-from src.posts import models
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from pathlib import Path
 
 from alembic import context
-import sys
-import os
-from pathlib import Path
+from sqlalchemy import pool
+from sqlalchemy.ext.asyncio import create_async_engine
+
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
+
+from src.app.core.config import get_settings  # noqa: E402
+from src.app.core.database import Base, import_all_models  # noqa: E402
+
+import_all_models()
+
 config = context.config
-
-# 🌟🌟🌟 新增这三行：强制 Alembic 读取我们的云端配置！
-import os
-from src.config import settings
+settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
-# 🌟🌟🌟 新增结束
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
-
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
-    """
-    url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url,
+        url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=True,
     )
-
     with context.begin_transaction():
         context.run_migrations()
 
 
-import asyncio
-from sqlalchemy.ext.asyncio import create_async_engine
-
-def do_run_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
-
+def do_run_migrations(connection) -> None:  # noqa: ANN001 - alembic callback
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+        render_as_batch=connection.dialect.name == "sqlite",
+    )
     with context.begin_transaction():
         context.run_migrations()
+
 
 async def run_async_migrations() -> None:
-    """In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
     connectable = create_async_engine(
-        config.get_main_option("sqlalchemy.url"),
-        poolclass=pool.NullPool,
+        config.get_main_option("sqlalchemy.url"), poolclass=pool.NullPool
     )
-
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
-
     await connectable.dispose()
 
+
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
     asyncio.run(run_async_migrations())
 
 

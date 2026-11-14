@@ -1,74 +1,103 @@
+# Local / single-host deployment.
+#
+# Key points:
+# * `migrate` runs `alembic upgrade head` exactly once, before any app replica
+#   starts (the app itself never migrates on boot);
+# * API and worker are the same image with different commands;
+# * SSE-friendly proxy settings belong to the ingress, see README.
 
 services:
-  # 1. 我们的 FastAPI 后端服务
-  web:
-    build: .                 # 告诉 Docker，根据当前目录的 Dockerfile 构建镜像
-    container_name: fastapi_app
-    ports:
-      - "8000:8000"          # 把容器内的 8000 端口暴露出来
-    depends_on:
-      - db                   # 启动顺序：必须先启动数据库和缓存
-      - redis
-    # 🌟 [新增] 让容器挂接并独占/共享 GPU！
-    # 暂时禁用硬性 GPU 绑定以备在无显卡环境如普通 Codespace 下正常启动
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
-    environment:
-      # ⚠️ 极其关键：在 Docker 内部的网络里，数据库的地址不再是 127.0.0.1，而是容器名 'db' 和 'redis'
-      - DATABASE_URL=postgresql+asyncpg://myuser:mypassword@db:5432/mydb
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - .:/app
-
-  # 2. PostgreSQL 数据库服务
   db:
-    image: pgvector/pgvector:pg15 # 直接拉取官方轻量级镜像
-    restart: always
-    container_name: postgres_db
+    image: pgvector/pgvector:pg16
+    container_name: xianxiaobao_db
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=myuser
-      - POSTGRES_PASSWORD=mypassword
-      - POSTGRES_DB=mydb
+      POSTGRES_USER: ${POSTGRES_USER:-myuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mypassword}
+      POSTGRES_DB: ${POSTGRES_DB:-mydb}
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data # 数据持久化，防止容器重启后数据清空
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-myuser} -d ${POSTGRES_DB:-mydb}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  # 3. Redis 缓存服务
   redis:
-    image: redis:alpine
-    container_name: redis_cache
+    image: redis:7-alpine
+    container_name: xianxiaobao_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "allkeys-lru"]
     ports:
       - "6379:6379"
-
-  # 👇👇👇 追加这个全新的常驻黑灯工厂服务 👇👇👇
-  celery_worker:
-    build: .
-    command: celery -A src.worker.celery_app worker --loglevel=info
     volumes:
-      - .:/app
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
-    env_file:        # 🌟 绝对不能漏！打工人需要 ZHIPU_API_KEY 才能干活！
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: .
+    container_name: xianxiaobao_migrate
+    command: ["alembic", "upgrade", "head"]
+    env_file:
       - .env
     environment:
-      # 🌟 你的 Redis 容器名是 redis_cache 还是 redis？必须和你的网络对齐！
-      - DATABASE_URL=postgresql+asyncpg://myuser:mypassword@db:5432/mydb
-      - REDIS_URL=redis://redis:6379/0  # 如果你的redis服务叫redis，就把这里改回redis
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-myuser}:${POSTGRES_PASSWORD:-mypassword}@db:5432/${POSTGRES_DB:-mydb}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
     depends_on:
-      - db
-      - redis  # 同上
+      db:
+        condition: service_healthy
+    restart: "no"
 
-# 声明用来保存数据库数据的“虚拟硬盘”
+  web:
+    build: .
+    container_name: xianxiaobao_web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-myuser}:${POSTGRES_PASSWORD:-mypassword}@db:5432/${POSTGRES_DB:-mydb}
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    # Allow in-flight agent runs to finish during a rolling update.
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health/live"]
+      interval: 30s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+
+  worker:
+    build: .
+    container_name: xianxiaobao_worker
+    restart: unless-stopped
+    command: ["python", "-m", "src.worker"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-myuser}:${POSTGRES_PASSWORD:-mypassword}@db:5432/${POSTGRES_DB:-mydb}
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    stop_grace_period: 30s
+
 volumes:
   pgdata:
+  redisdata:

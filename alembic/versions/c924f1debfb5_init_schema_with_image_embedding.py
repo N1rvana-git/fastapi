@@ -76,7 +76,10 @@ def upgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            # ``sa.func.now()`` renders CURRENT_TIMESTAMP on SQLite and now()
+            # on PostgreSQL; the old literal text("now()") made this migration
+            # PostgreSQL-only.
+            server_default=sa.func.now(),
             nullable=True,
         ),
         sa.ForeignKeyConstraint(
@@ -138,7 +141,10 @@ def upgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            # ``sa.func.now()`` renders CURRENT_TIMESTAMP on SQLite and now()
+            # on PostgreSQL; the old literal text("now()") made this migration
+            # PostgreSQL-only.
+            server_default=sa.func.now(),
             nullable=True,
         ),
         sa.ForeignKeyConstraint(

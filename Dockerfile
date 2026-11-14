@@ -1,25 +1,63 @@
-# 1. 指定基础镜像：我们站在巨人的肩膀上，直接用官方装好 Python 3.11 的精简版 Linux 系统
-FROM python:3.11-slim
+# Multi-stage image for the API (and, with a different command, the worker).
+#
+# Design notes:
+# * `uv` resolves/installs an order of magnitude faster than pip and respects
+#   the same requirements file.
+# * heavy AI extras are opt-in via `--build-arg INSTALL_AI=1`.
+# * NO database migration in CMD. `alembic upgrade head` belongs to the deploy
+#   pipeline (docker compose `migrate` service / K8s Job); N replicas racing the
+#   same migration corrupts the schema.
+# * runs as an unprivileged user and ships a liveness healthcheck.
 
-# 2. 指定工作目录：进入集装箱后，我们把工作台设在 /app 目录下
+ARG PYTHON_VERSION=3.11
+
+FROM python:${PYTHON_VERSION}-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
+COPY --from=ghcr.io/astral-sh/uv:0.4.30 /uv /bin/uv
+
 WORKDIR /app
+COPY requirements.txt requirements-ai.txt ./
 
-# 3. 复制依赖清单：把本地的 requirements.txt 抄一份到集装箱的当前目录 (.)
-COPY requirements.txt .
+ARG INSTALL_AI=0
+RUN uv pip install --system -r requirements.txt \
+    && if [ "$INSTALL_AI" = "1" ]; then uv pip install --system -r requirements-ai.txt; fi
 
-# 4. 安装依赖：让集装箱里的系统照着清单安装包 (加 --no-cache-dir 可以减小集装箱体积)
-RUN pip install uv && uv pip install --system --no-cache-dir -r requirements.txt
-
-# 4.1 安装 Playwright Chromium 及其系统依赖，避免运行期缺少浏览器可执行文件
-RUN playwright install --with-deps chromium
-
-# 5. 复制项目代码：把本地文件夹里的所有东西，统统搬进集装箱的 /app 目录下
-# (不用担心把垃圾文件搬进去，因为我们刚才写了 .dockerignore)
 COPY . .
+RUN python -m compileall -q src
 
-# 6. 声明端口：告诉集装箱，这个应用运行在 8000 端口
+FROM python:${PYTHON_VERSION}-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONFAULTHANDLER=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 appuser
+
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /app /app
+
+WORKDIR /app
+RUN mkdir -p /app/uploads /app/static && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
-# 7. 启动命令：集装箱启动时，自动执行这行命令启动 FastAPI 
-# 注意：这里 host 必须是 0.0.0.0，意思是允许集装箱外部访问它
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/health/live || exit 1
+
+# One process per container: scale with replicas, not workers, so that
+# graceful shutdown, memory limits and probes stay predictable.
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--no-access-log", "--proxy-headers", "--forwarded-allow-ips=*"]
+
+# Worker command (override CMD):
+#   docker run --rm <image> python -m src.worker

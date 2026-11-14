@@ -1,4 +1,4 @@
-﻿__pycache__/
+__pycache__/
 *.py[cod]
 *.class
 *.so
@@ -64,3 +64,13 @@ File Upload
 temp.json
 *.pyc
 __pycache__/
+
+# Tooling caches
+.ruff_cache/
+.mypy_cache/
+.docker/
+ci_migrations.db
+
+# Refactor scratch artifacts
+_pdf_extract.txt
+*.db-journal

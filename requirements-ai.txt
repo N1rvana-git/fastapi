@@ -1,0 +1,13 @@
+# Optional AI / browser capabilities.
+#
+#   pip install -r requirements-ai.txt
+#   playwright install --with-deps chromium   # needed for the price scraper
+#
+# The API degrades gracefully when these are absent: vision endpoints answer
+# 503 FEATURE_UNAVAILABLE and the scraper tool returns a truthful "unavailable"
+# message instead of inventing prices.
+
+torch>=2.1
+transformers>=4.40
+pillow>=10.0
+playwright>=1.40

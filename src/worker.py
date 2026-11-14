@@ -1,64 +1,73 @@
-import os
-import time
-from celery import Celery
-from dotenv import load_dotenv
+"""Async worker process entry point.
 
-# 加载环境变量 (确保能读到真实的配置)
-load_dotenv()
+    python -m src.worker
 
-# ==========================================
-# 🏭 1. 建立洗碗厂 (初始化 Celery 实例)
-# ==========================================
-# 我们雇佣 Redis 作为我们的“传送带 (Broker)”和“结果存放架 (Backend)”
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0") # 默认连 docker-compose 里的 redis
+Consumes the Redis task stream with a consumer group, so the web pods stay small
+and heavy work (embeddings, Feishu replies, notifications) scales independently.
+Under Kubernetes this is the same image with a different command, and the
+liveness probe is the process itself.
+"""
 
-celery_app = Celery(
-    "fastapi_heavy_factory",
-    broker=REDIS_URL,
-    backend=REDIS_URL
-)
+from __future__ import annotations
 
-# ⚙️ 工厂配置项优化 (大厂必备防弹衣)
-celery_app.conf.update(
-    task_serializer='json',
-    accept_content=['json'],
-    result_serializer='json',
-    timezone='Asia/Shanghai',
-    enable_utc=True,
-    # 🌟 极其重要：如果洗碗工突然猝死，碗会重新回到传送带上分配给别人！
-    task_acks_late=True, 
-    worker_prefetch_multiplier=1 # 防止一个洗碗工抢了太多碗洗不完
-)
+import asyncio
+import signal
+import sys
 
-# ==========================================
-# 🧑‍🔧 2. 定义车间工人 (编写具体的耗时任务)
-# ==========================================
+from src.app.container import AppContainer, set_container
+from src.app.core.config import get_settings
+from src.app.core.database import import_all_models, set_database
+from src.app.core.logging import configure_logging, get_logger, log_extra
+from src.app.core.tasks import TaskWorker
+from src.app.task_registry import import_task_modules
 
-@celery_app.task(bind=True, max_retries=3)
-def inject_embedding_task(self, item_id: int, item_name: str):
-    """
-    车间任务 1：为商品生成 AI 向量 (极其耗费 CPU 和 网络)
-    """
-    print(f"📦 [向量车间] 开始处理商品 ID:{item_id} [{item_name}] 的向量生成任务...")
-    
+logger = get_logger(__name__)
+
+
+async def run_worker(stop_event: asyncio.Event) -> None:
+    settings = get_settings()
+    configure_logging(settings)
+    import_task_modules()
+    import_all_models()
+
+    container = AppContainer.create(settings)
+    await container.startup()
+    set_container(container)
+    set_database(container.database)
     try:
-        # 模拟生成向量的耗时操作 (比如调用智谱 AI 的 embedding 接口)
-        time.sleep(0.1) 
-        
-        print(f"✅ [向量车间] 商品 ID:{item_id} 向量注入完成！")
-        return {"status": "success", "item_id": item_id}
-        
-    except Exception as exc:
-        print(f"❌ [向量车间] 任务崩溃，准备重试: {exc}")
-        # 如果调用大模型失败，每隔 5 秒自动重试，最多重试 3 次！
-        raise self.retry(exc=exc, countdown=5)
+        worker = TaskWorker(settings=settings, redis_manager=container.redis)
+        await worker.run(stop_event)
+    finally:
+        set_container(None)
+        set_database(None)
+        await container.shutdown()
 
-@celery_app.task(bind=True)
-def send_feishu_alert_task(self, item_name: str, price: float, user_email: str, address: str):
-    """
-    车间任务 2：发送飞书发货通知 (耗时网络请求)
-    """
-    print(f"📧 [通知车间] 正在向飞书发送订单通知！商品: {item_name}, 客户: {user_email}")
-    time.sleep(2) # 模拟网络延迟
-    print("✅ [通知车间] 飞书消息发送成功！")
-    return {"status": "sent"}
+
+def _install_signal_handlers(stop_event: asyncio.Event) -> None:
+    loop = asyncio.get_running_loop()
+
+    def _stop(*_: object) -> None:
+        logger.info("shutdown signal received", extra=log_extra(event="worker_stop_signal"))
+        stop_event.set()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, _stop)
+        except (NotImplementedError, RuntimeError):  # Windows / non-main thread
+            signal.signal(sig, lambda *_: loop.call_soon_threadsafe(stop_event.set))
+
+
+async def main() -> int:
+    stop_event = asyncio.Event()
+    _install_signal_handlers(stop_event)
+    settings = get_settings()
+    configure_logging(settings)
+    if not settings.TASKS_ENABLED:
+        logger.error("TASKS_ENABLED=false: refusing to start the worker")
+        return 2
+    await run_worker(stop_event)
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - process entry point
+    sys.exit(asyncio.run(main()))
