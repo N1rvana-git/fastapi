@@ -374,7 +374,7 @@ stateDiagram-v2
 | 架构设计合理性 | 4 | 模块化单体、单向依赖、组合根、领域异常 | 用 `import-linter` 把分层规则变成 CI 门禁 |
 | 性能与可扩展性 | 4 | 全异步、连接池、两级缓存、原子 UPDATE、SSE 背压 | 压测（locust/k6）出 P95；大列表引入 keyset 分页 |
 | 服务治理与稳定性 | 3 | 限流/超时/重试/退避、会话锁、审批超时、优雅停机 | 熔断器（半开/关闭）与降级开关；多副本演练 |
-| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、115 测试、uv.lock、迁移双向 | 覆盖率 80%、依赖审计 |
+| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、116 测试、uv.lock、迁移双向 | 覆盖率 80%、依赖审计 |
 | 可观测性 | 3 | JSON 日志 + trace_id + 双探针 + 可选指标 | 接入 OTel/Prometheus + Grafana 面板与分级告警 |
 | 安全与合规 | 4 | JWT/密码/RBAC/上传/CORS/错误脱敏 | `pip-audit`、限流分级、敏感字段脱敏展示 |
 | 业务适配与演进能力 | 4 | 新增域只需加目录；任务/工具/审批即插即用 | 写 ADR、补 API 契约测试（Schemathesis） |
@@ -404,8 +404,8 @@ stateDiagram-v2
 
 - SQLite 下 pgvector 语义检索不可用（自动降级为词法）；向量检索需 PostgreSQL + pgvector。
 - 无 Redis 时幂等/限流/锁是**进程内**语义，多副本会失效，仅适合开发与单副本部署。
-- `users.email` 的唯一性由 service 校验（历史库可能有重复），未加数据库唯一约束；
-  高并发注册存在极小概率重复，建议先清洗数据再加唯一索引。
+- `users.email` 已由迁移 `d4b7e2a9c1f0` 保证唯一：先把历史重复邮箱归档为 `<email>+dup<id>`
+  （保留最早账号），再建立 `lower(email)` 部分唯一索引；归档账号的归属仍需人工确认，不会自动删除。
 - 视觉模型首次加载仍需下载权重（懒加载，首次请求变慢）；建议构建镜像时预热或挂载缓存卷。
 - 飞书未配置 `FEISHU_ENCRYPT_KEY` 时只做 verification token 校验（向后兼容）；生产必须配置，
   否则拿到 webhook URL 的人可以伪造事件。

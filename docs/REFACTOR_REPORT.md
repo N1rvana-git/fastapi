@@ -16,7 +16,7 @@
 模块化单体 + 严格分层 + 全链路异步 + 纯 ASGI 中间件 + lifespan 资源治理 + 领域异常 + 幂等/限流 +
 可降级基础设施 + Redis Stream 任务队列与 SSE 缓冲 + HITL 审批 + 结构化日志/探针 + 质量门禁。
 
-结果：115 个测试全绿（1 个需要真实 PostgreSQL 的用例默认跳过）；`alembic upgrade/downgrade` 双向通过；
+结果：116 个测试全绿（1 个需要真实 PostgreSQL 的用例默认跳过）；`alembic upgrade/downgrade` 双向通过；
 文档化改造点与差距。
 
 ---
@@ -82,7 +82,7 @@
 
 | 项目 | 命令 | 结果 |
 | --- | --- | --- |
-| 单元 + 集成测试 | `pytest tests -q` | **115 passed, 1 skipped**（跳过项需要 `POSTGRES_RAW_DSN`） |
+| 单元 + 集成测试 | `pytest tests -q` | **116 passed, 1 skipped**（跳过项需要 `POSTGRES_RAW_DSN`） |
 | 覆盖率 | `pytest --cov=src/app` | **约 70%**（CI 门禁 60%） |
 | Lint | `ruff check src tests` | **All checks passed**（0 告警） |
 | 格式 | `ruff format --check src tests` | 92 files already formatted |
@@ -111,7 +111,7 @@
 | --- | --- | --- |
 | 最大单文件行数 | 932（posts/router.py） | ~374（items/router.py，且只做 HTTP 编排） |
 | 导入应用耗时 | 受 600MB 模型下载/加载支配 | 毫秒级（模型懒加载） |
-| 自动化测试 | 名义存在、实际失效 | 115 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密/LangGraph |
+| 自动化测试 | 名义存在、实际失效 | 116 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密/LangGraph |
 | 交易链路 | 必然 500 | 可下单、可重复请求重放、防超卖 |
 | 收藏功能 | 必然 500 | 可用（新增关联表） |
 | 权限提升 | 匿名可注册 admin | 默认禁止，管理员 API 才能改角色 |
@@ -150,9 +150,9 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 4. 然后做**协作型能力**：Redis Stream 事件缓冲 + Last-Event-ID 续传 + 会话锁 + 三层背压 +
    人工审批状态机（金额超阈值挂起、幂等恢复、超时清理）；
 5. 最后做**工程闭环**：lifespan 资源治理、纯 ASGI 中间件、JSON 日志 + trace_id、双探针、
-   alembic 双向迁移、Docker/compose/CI/pre-commit、115 个测试。
+   alembic 双向迁移、Docker/compose/CI/pre-commit、116 个测试。
 
-**Result**：115 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
+**Result**：116 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
 防超卖"；新增能力（幂等、限流、SSE 续传、HITL）都有对应测试与文档。
 
 **可能的追问**：
@@ -168,7 +168,6 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 
 - **30 天**：覆盖率从 70% 提到核心模块 80%；补 `pip-audit`/Dependabot；补 SSE/网关/降级路径测试；
 - **60 天**：接入 OpenTelemetry + Prometheus/Grafana 面板与分级告警；在 Linux runner 复跑压测基准；
-  飞书签名校验；`email` 唯一索引（先清洗数据）；
 - **90 天**：多副本故障演练（Redis/DB/LLM 故障注入）；按需接入 LangGraph/Temporal 处理复杂长流程；
   把"分层规则""SSE 契约""错误码"做成自动化契约测试。
 
@@ -192,7 +191,7 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 - 删除了 `API_KEy` 拼写别名（`API_KEY` 仍兼容），消除 Ruff SIM112，并同步测试与文档；
 - `_pdf_extract.txt`、`mypy_before.txt` 等临时产物已清理。
 
-复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 115 passed、
+复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 116 passed、
 覆盖率约 70%、干净 SQLite 迁移 up/down 通过。
 
 ---

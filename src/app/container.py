@@ -79,6 +79,11 @@ class AppContainer:
             container.redis, namespace="xianxiaobao:cache", ttl=settings.CACHE_TTL_SECONDS
         )
         container.embeddings = EmbeddingClient(settings, container.http, cache=container.cache)
+        if settings.EMBEDDING_ENABLED and not settings.ZHIPUAI_API_KEY:
+            logger.warning(
+                "EMBEDDING_ENABLED=true but ZHIPUAI_API_KEY is empty; "
+                "semantic search/RAG will fall back to keyword search"
+            )
         container.vision = VisionService(settings)
         container.storage = build_storage(settings)
         container.token_service = TokenService(settings)

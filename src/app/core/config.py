@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # src/app/core/config.py -> src/app/core -> src/app -> src -> <repo root>
@@ -100,18 +100,32 @@ class Settings(BaseSettings):
     HTTP_MAX_KEEPALIVE_CONNECTIONS: int = Field(default=20, ge=0)
 
     # ---------------------------------------------------------------- llm
-    CHAT_API_KEY: str = ""
+    # DeepSeek's official API is OpenAI-compatible for chat (no embeddings):
+    # accept both CHAT_* and the DEEPSEEK_* names so a DeepSeek-only .env works.
+    CHAT_API_KEY: str = Field(
+        default="", validation_alias=AliasChoices("CHAT_API_KEY", "DEEPSEEK_API_KEY")
+    )
     API_KEY: str = ""  # legacy alias kept for existing deployments
-    CHAT_BASE_URL: str = "https://api.zetatechs.com/v1"
-    CHAT_MODEL: str = "gemini-3-flash-preview-free"
-    ALLOWED_CHAT_MODELS: str = "gemini-3-flash-preview-free"
+    CHAT_BASE_URL: str = Field(
+        default="https://api.zetatechs.com/v1",
+        validation_alias=AliasChoices("CHAT_BASE_URL", "DEEPSEEK_BASE_URL"),
+    )
+    CHAT_MODEL: str = Field(
+        default="gemini-3-flash-preview-free",
+        validation_alias=AliasChoices("CHAT_MODEL", "DEEPSEEK_MODEL"),
+    )
+    ALLOWED_CHAT_MODELS: str = "gemini-3-flash-preview-free,deepseek-flash,deepseek-v4-pro"
     LLM_MAX_CONCURRENCY: int = Field(default=32, ge=1, le=1024)
     LLM_MAX_RETRIES: int = Field(default=3, ge=0, le=10)
     LLM_RETRY_BASE_DELAY: float = Field(default=0.5, ge=0)
     LLM_TIMEOUT_SECONDS: float = Field(default=120.0, gt=0)
 
     # ---------------------------------------------------------- embeddings
-    ZHIPUAI_API_KEY: str = ""
+    # DeepSeek has no /embeddings endpoint; this stays a separate provider
+    # (Zhipu embedding-2, 1024 dims by default).
+    ZHIPUAI_API_KEY: str = Field(
+        default="", validation_alias=AliasChoices("ZHIPUAI_API_KEY", "ZHIPU_API_KEY")
+    )
     ZHIPU_EMBEDDING_MODEL: str = "embedding-2"
     ALLOWED_EMBEDDING_MODELS: str = "embedding-2"
     EMBEDDING_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"

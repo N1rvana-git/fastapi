@@ -1,6 +1,6 @@
 # 迁移指南（旧版 → 0.2.0）
 
-本次重构是**有意的破坏性升级**。下面按"必须改、建议改、可忽略"分层，最后给出旧代码的清理命令。
+本次重构是**有意的破坏性升级**。下面按"必须改、建议改、可忽略"分层，并说明旧代码的去向。
 
 ---
 
@@ -17,20 +17,13 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 pg_dump ... > backup.sql
 alembic upgrade head
 
-# 4) 后端需要同步改造的：注册路径、登录响应、错误体、SSE 请求头
-# 5) 删除旧代码（重构工具所在的沙箱禁止删除文件，所以旧包暂时是"导入即报错"的守卫）
-git rm -r src/posts src/auth src/users health
-git rm src/feishu/router.py
-git rm tests/test_main.py tests/test_user.py tests/test_feishu.py
-git rm -r tests/test_unit
-rm -f tests/test_analyze_upload.py            # 未跟踪的占位文件
-git commit -m "refactor: modular monolith architecture (0.2.0)"
+# 4) 后端调用方需要同步改造：注册路径、登录响应、错误体、SSE 请求头
 ```
 
-> `src/config.py` / `src/database.py` / `src/llm_policy.py` 三个兼容 shim 已在本轮删除；
-> 新代码请使用 `src.app.core.config` 与 `src.app.core.database`（模型白名单校验也在 Settings 中）。
-> `src/posts` / `src/auth` / `src/users` / `src/feishu` / `health` 的 `__init__.py`
-> 是守卫：import 会抛出带迁移指引的 `ImportError`。执行上面的 `git rm` 后自然消失。
+> **0.2.0 起旧包已从 Git 树删除**：`src/posts`、`src/auth`、`src/users`、`src/feishu`、
+> `health` 以及 `src/config.py` / `src/database.py` / `src/llm_policy.py` 三个 shim
+> 都已经不存在；新克隆无需执行任何 `git rm`，也不会再看到"导入即报错"的守卫。
+> 如果你从 0.1.x 迁移，直接切到 0.2.0+ 的代码树，按第 2 节改调用方即可。
 > 你自己的学习笔记（`FastApi-practice.md`、`FastAPI项目重读笔记.md`）不属于代码，
 > 是否保留由你决定。
 
