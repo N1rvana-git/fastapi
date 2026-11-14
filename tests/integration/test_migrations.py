@@ -16,7 +16,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASE_REVISION = "b2f4c7d91a30"
-HEAD_REVISION = "d4b7e2a9c1f0"
+HEAD_REVISION = "e5c8f3b2a1d9"
 
 
 def _alembic(db_path: Path, *args: str) -> None:

@@ -20,6 +20,7 @@ Design notes
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Annotated, Any, TypedDict
@@ -28,12 +29,13 @@ from langchain_core.messages import (
     AIMessage,
     BaseMessage,
     HumanMessage,
+    RemoveMessage,
     SystemMessage,
     ToolMessage,
 )
-from langgraph.config import get_config
+from langgraph.config import get_config, get_stream_writer
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import add_messages
+from langgraph.graph.message import REMOVE_ALL_MESSAGES, add_messages
 from langgraph.types import Command, interrupt
 
 from src.app.core.config import Settings
@@ -105,9 +107,19 @@ class LangGraphAgentRuntime:
                 thread_id=thread_id,
                 tool_call_id=tool_call_id,
             )
+            _emit(
+                {
+                    "event": "tool_start",
+                    "name": name,
+                    "arguments": json.dumps(arguments, ensure_ascii=False),
+                }
+            )
+            interrupted = False
+            ok = True
             try:
                 content = await execute_tool(name, arguments, context)
             except ApprovalRequiredError as exc:
+                interrupted = True
                 approval = await self._request_approval(
                     thread_id=thread_id,
                     user_id=user_id,
@@ -140,7 +152,13 @@ class LangGraphAgentRuntime:
                     )
                 else:
                     content = "人工审核未通过，本次下单已取消。"
+            except Exception as exc:
+                logger.exception("langgraph tool execution crashed", extra={"ctx_tool": name})
+                ok = False
+                content = json.dumps({"status": "error", "message": str(exc)}, ensure_ascii=False)
             results.append(ToolMessage(content=content, tool_call_id=tool_call_id))
+            if not interrupted:
+                _emit({"event": "tool_end", "name": name, "ok": ok})
         return {"messages": results}
 
     # ------------------------------------------------------------------- run
@@ -176,12 +194,18 @@ class LangGraphAgentRuntime:
             }
         )
 
-        async for chunk, metadata in self.graph.astream(
-            payload, config=config, stream_mode="messages"
+        async for mode, data in self.graph.astream(
+            payload, config=config, stream_mode=["messages", "custom"]
         ):
             if cancel_event is not None and cancel_event.is_set():
                 yield AgentEvent("aborted", {"reason": "client_disconnected"})
                 return
+            if mode == "custom":
+                event = _custom_event(data)
+                if event is not None:
+                    yield event
+                continue
+            chunk, metadata = data
             if metadata.get("langgraph_node") != "chatbot":
                 continue
             text = _chunk_text(chunk)
@@ -209,9 +233,15 @@ class LangGraphAgentRuntime:
         if not snapshot.values:
             raise ConflictError("找不到可恢复的会话状态", details={"thread_id": thread_id})
 
-        async for chunk, metadata in self.graph.astream(
-            Command(resume=decision), config=config, stream_mode="messages"
+        async for mode, data in self.graph.astream(
+            Command(resume=decision), config=config, stream_mode=["messages", "custom"]
         ):
+            if mode == "custom":
+                event = _custom_event(data)
+                if event is not None:
+                    yield event
+                continue
+            chunk, metadata = data
             if metadata.get("langgraph_node") != "chatbot":
                 continue
             text = _chunk_text(chunk)
@@ -226,6 +256,58 @@ class LangGraphAgentRuntime:
             yield AgentEvent("done", {"interrupted": True})
             return
         yield AgentEvent("done", {"resumed": True})
+
+    # ------------------------------------------------------------ time travel
+    async def history(self, *, thread_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        """List checkpoints for a conversation (newest first)."""
+
+        config = {"configurable": {"thread_id": thread_id}}
+        snapshots: list[dict[str, Any]] = []
+        async for snapshot in self.graph.aget_state_history(config, limit=limit):
+            snapshots.append(_snapshot_summary(snapshot))
+        return snapshots
+
+    async def rollback(self, *, thread_id: str, checkpoint_id: str) -> dict[str, Any]:
+        """Fork the conversation from a historical checkpoint.
+
+        LangGraph checkpoints are immutable, so a "rollback" writes a new
+        checkpoint whose state is a copy of the chosen one; subsequent runs
+        continue from the restored messages.  Returns a summary instead of the
+        whole state (messages can be large).
+        """
+
+        config = {"configurable": {"thread_id": thread_id}}
+        target: Any | None = None
+        async for snapshot in self.graph.aget_state_history(config):
+            current = str(snapshot.config.get("configurable", {}).get("checkpoint_id") or "")
+            if current == checkpoint_id:
+                target = snapshot
+                break
+        if target is None:
+            raise ConflictError(
+                "找不到指定的 checkpoint",
+                details={"thread_id": thread_id, "checkpoint_id": checkpoint_id},
+            )
+
+        messages = list(target.values.get("messages", []))
+        update: dict[str, Any] = {
+            "messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *messages],
+            "steps": int(target.values.get("steps", 0)),
+        }
+        if "user_id" in target.values:
+            update["user_id"] = int(target.values.get("user_id") or 0)
+        # ``as_node`` tells LangGraph which node "produced" the restored state:
+        # for a non-empty history continue from the chatbot, for the initial
+        # empty checkpoint restart from START (otherwise routing sees no message).
+        await self.graph.aupdate_state(
+            target.config, update, as_node="chatbot" if messages else START
+        )
+        return {
+            "thread_id": thread_id,
+            "checkpoint_id": checkpoint_id,
+            "messages": len(messages),
+            "restored": True,
+        }
 
     # --------------------------------------------------------------- helpers
     async def _request_approval(
@@ -307,6 +389,44 @@ def _pending_interrupts(snapshot: Any) -> list[dict[str, Any]]:
                 }
             )
     return pending
+
+
+def _emit(payload: dict[str, Any]) -> None:
+    """Emit a custom stream event (no-op when called outside ``astream``)."""
+
+    try:
+        writer = get_stream_writer()
+    except Exception:  # pragma: no cover - only outside a stream context
+        return
+    writer(payload)
+
+
+def _custom_event(data: Any) -> AgentEvent | None:
+    if not isinstance(data, dict):
+        return None
+    event = data.get("event")
+    if event == "tool_start":
+        return AgentEvent(
+            "tool_start",
+            {"name": str(data.get("name", "")), "arguments": str(data.get("arguments", ""))},
+        )
+    if event == "tool_end":
+        return AgentEvent(
+            "tool_end", {"name": str(data.get("name", "")), "ok": bool(data.get("ok"))}
+        )
+    return None
+
+
+def _snapshot_summary(snapshot: Any) -> dict[str, Any]:
+    configurable = snapshot.config.get("configurable", {})
+    metadata = snapshot.metadata or {}
+    return {
+        "checkpoint_id": configurable.get("checkpoint_id"),
+        "created_at": snapshot.created_at,
+        "step": metadata.get("step"),
+        "next": list(snapshot.next or []),
+        "message_count": len(snapshot.values.get("messages", [])),
+    }
 
 
 __all__ = [

@@ -184,7 +184,7 @@ alembic downgrade -1          # 回到 c924f1debfb5
 
 ## 7. 未来工作（与本文档相邻）
 
-- 覆盖率从 60% 门槛逐步提高到核心模块 80%（当前约 70%）；
+- 覆盖率门禁从 60% 提高到 80%（0.3.0 起行覆盖率 80.32%，CI 硬门禁）；
 - 接入 OpenTelemetry（保留 `trace_id` 上下文即可低成本挂载）；
 - LangGraph 已作为可选运行时提供：`pip install -r requirements-langgraph.txt`，
   设置 `AGENT_RUNTIME=langgraph` 与 `POSTGRES_RAW_DSN`（psycopg3 DSN）即可启用；

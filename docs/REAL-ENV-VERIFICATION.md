@@ -114,8 +114,8 @@ docker exec xjb-redis redis-cli XINFO GROUPS xianxiaobao:tasks
 
 - 真实商业 LLM（只用了本地 stub）与真实飞书租户；
 - Playwright 爬虫在容器内的浏览器依赖；
-- pgvector **索引**（HNSW/IVFFlat）与大规模召回性能——当前只验证了 `ORDER BY cosine_distance`
-  的正确性，生产数据量大时应建索引并做压测；
+- pgvector **索引**：迁移 `e5c8f3b2a1d9` 已为 `item.embedding` / `knowledge_base.embedding`
+  建立 HNSW（`vector_cosine_ops`）索引，SQLite 下 no-op；尚未做百万级召回率/延迟基准；
 - 并发压测已完成（100 并发抢购 + 50 路 SSE，见 [LOAD-TEST-REPORT](LOAD-TEST-REPORT.md)），
   但宿主为 Windows + Docker Desktop，绝对值需在 Linux 环境复测；
 - Docker 镜像构建（`docker build`）未在本次执行，仅验证了容器化依赖服务。

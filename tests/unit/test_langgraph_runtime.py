@@ -307,6 +307,88 @@ async def test_chat_service_resume_continues_the_graph(
 
 
 @pytest.mark.asyncio
+async def test_tool_events_match_the_native_contract(
+    client: Any, started_app: Any, settings: Any, auth_headers: dict[str, str]
+) -> None:
+    import json
+
+    from tests.conftest import register_and_login
+
+    await register_and_login(client, email="graph-events@example.com")
+    # Below AGENT_APPROVAL_THRESHOLD, so the tool executes without interrupt().
+    listing = await create_listing(client, auth_headers, price=50.0, inventory=2)
+
+    async with started_app.state.container.database.session() as session:
+        buyer = await users_repository.get_by_email(session, "graph-events@example.com")
+        assert buyer is not None
+        buyer_id = buyer.id
+
+    runtime = await _runtime(
+        started_app, settings, [_tool_call_message(listing["id"]), AIMessage(content="已完成")]
+    )
+    events = [
+        event
+        async for event in runtime.run(
+            user_id=buyer_id,
+            user_name=buyer.username,
+            thread_id=f"u{buyer_id}:graph-events",
+            messages=[{"role": "user", "content": "下单"}],
+            cancel_event=asyncio.Event(),
+        )
+    ]
+    types = [event.type for event in events]
+    assert "tool_start" in types and "tool_end" in types
+    assert types.index("tool_start") < types.index("tool_end")
+
+    start = next(event for event in events if event.type == "tool_start")
+    assert start.data["name"] == "create_order"
+    assert json.loads(start.data["arguments"])["item_id"] == listing["id"]
+    end = next(event for event in events if event.type == "tool_end")
+    assert end.data == {"name": "create_order", "ok": True}
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_history_and_rollback(
+    client: Any, started_app: Any, settings: Any, auth_headers: dict[str, str]
+) -> None:
+    from tests.conftest import register_and_login
+
+    await register_and_login(client, email="graph-time@example.com")
+    listing = await create_listing(client, auth_headers, price=50.0, inventory=2)
+
+    async with started_app.state.container.database.session() as session:
+        buyer = await users_repository.get_by_email(session, "graph-time@example.com")
+        assert buyer is not None
+        buyer_id = buyer.id
+
+    runtime = await _runtime(
+        started_app, settings, [_tool_call_message(listing["id"]), AIMessage(content="已完成")]
+    )
+    thread_id = f"u{buyer_id}:graph-time"
+    _ = [
+        event
+        async for event in runtime.run(
+            user_id=buyer_id,
+            user_name=buyer.username,
+            thread_id=thread_id,
+            messages=[{"role": "user", "content": "下单"}],
+            cancel_event=asyncio.Event(),
+        )
+    ]
+
+    snapshots = await runtime.history(thread_id=thread_id, limit=20)
+    assert snapshots
+    assert all(item["checkpoint_id"] for item in snapshots)
+
+    target = min(snapshots, key=lambda item: int(item["message_count"]))
+    result = await runtime.rollback(thread_id=thread_id, checkpoint_id=str(target["checkpoint_id"]))
+    assert result["restored"] is True
+
+    state = await runtime.graph.aget_state({"configurable": {"thread_id": thread_id}})
+    assert len(state.values.get("messages", [])) == int(target["message_count"])
+
+
+@pytest.mark.asyncio
 async def test_container_selects_langgraph_runtime_when_configured(settings: Any) -> None:
     from src.app.main import create_app
 

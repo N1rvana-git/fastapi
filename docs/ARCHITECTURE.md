@@ -314,11 +314,15 @@ stateDiagram-v2
   (thread, action, payload) 幂等，下单闸门在扣库存之前，重复执行无副作用。
 - **状态机守卫**：会话存在 pending interrupt 时，新消息直接 `409`，避免破坏 checkpoint 树。
 - **停机顺序**：先 drain 在跑的图，再关闭 checkpointer 池（见 `container.shutdown`）。
-- **Windows 开发**：psycopg3 异步连接不支持 ProactorEventLoop，`src/main.py` / `src/worker.py` /
-  tests 在 Windows 上切换到 `WindowsSelectorEventLoopPolicy`（`core/compat.py`）。
-
-尚未实现：checkpoint 的 time-travel 回滚（PDF 的 `aget_state_history` + `aupdate_state`），
-以及多副本共享 checkpointer 的压测。当前审批表已覆盖"挂起 → 决策 → 幂等执行 → 继续对话"闭环。
+- **LangGraph 流事件**：`tool_start/tool_end` 通过 `get_stream_writer()` 进入
+  `astream(stream_mode=["messages","custom"])`，与 native 的 SSE 契约一致（参数为 JSON 字符串，
+  `ok` 表示工具是否成功）。
+- **Windows 开发**：psycopg3 异步连接不支持 ProactorEventLoop；仅在
+  `AGENT_RUNTIME=langgraph` 时切换到 `WindowsSelectorEventLoopPolicy`（`core/compat.py`），
+  避免默认运行时的连接吞吐被 15.6ms 定时器粒度拖慢。
+- **Time travel**：`history()` 列 checkpoint；`rollback()` 用 `aupdate_state` 从历史 checkpoint
+  分叉恢复，`RemoveMessage(REMOVE_ALL_MESSAGES)` 防止 `add_messages` 重复追加。
+  尚未验证：多副本共享 checkpointer 的压测与 checkpoint 清理策略。
 
 ---
 
@@ -356,7 +360,7 @@ stateDiagram-v2
 | `structlog` | 未使用 | 依赖未引入；自研 JSON formatter 覆盖相同能力，缺 `bind()` 链式 API |
 | OpenTelemetry 链路追踪 | 未接入 | 无 SDK；保留 `trace_id` 上下文与中间件挂载点，接入成本低 |
 | `mypy` 严格配置全绿 | 已达成（0.2.1） | `mypy src/app` → 0 errors，CI 已移除 `continue-on-error` |
-| 覆盖率 ≥80%（核心模块） | 未达成 | 当前约 70%；CI 门禁 60%，逐步提升 |
+| 覆盖率 ≥80%（核心模块） | 已达成 | 行覆盖率 **80.32%**，CI 硬门禁 80%；分支覆盖率约 56%，后续提升 |
 | Granian / uvloop | 未启用 | 镜像默认 uvicorn；Granian 是可选替换（见 RUNBOOK） |
 | Temporal / Taskiq | 未引入 | 自研 Redis Stream 队列满足当前规模；复杂长流程再引入 |
 | LangGraph runtime + checkpointer | 已接入（可选） | `AGENT_RUNTIME=langgraph`，独立 psycopg 池；真实 PG 测试通过，见 §6.4 |
@@ -372,9 +376,9 @@ stateDiagram-v2
 | 维度 | 分 | 证据 | 下一步 |
 | --- | --- | --- | --- |
 | 架构设计合理性 | 4 | 模块化单体、单向依赖、组合根、领域异常 | 用 `import-linter` 把分层规则变成 CI 门禁 |
-| 性能与可扩展性 | 4 | 全异步、连接池、两级缓存、原子 UPDATE、SSE 背压 | 压测（locust/k6）出 P95；大列表引入 keyset 分页 |
+| 性能与可扩展性 | 4 | 全异步、连接池、两级缓存、原子 UPDATE、SSE 背压、压测报告 | 在 Linux runner 复跑基准；热点商品预扣/排队 |
 | 服务治理与稳定性 | 3 | 限流/超时/重试/退避、会话锁、审批超时、优雅停机 | 熔断器（半开/关闭）与降级开关；多副本演练 |
-| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、116 测试、uv.lock、迁移双向 | 覆盖率 80%、依赖审计 |
+| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、167 测试、uv.lock、迁移双向 | 分支覆盖率、依赖审计 |
 | 可观测性 | 3 | JSON 日志 + trace_id + 双探针 + 可选指标 | 接入 OTel/Prometheus + Grafana 面板与分级告警 |
 | 安全与合规 | 4 | JWT/密码/RBAC/上传/CORS/错误脱敏 | `pip-audit`、限流分级、敏感字段脱敏展示 |
 | 业务适配与演进能力 | 4 | 新增域只需加目录；任务/工具/审批即插即用 | 写 ADR、补 API 契约测试（Schemathesis） |
@@ -403,6 +407,7 @@ stateDiagram-v2
 ## 10. 已知限制
 
 - SQLite 下 pgvector 语义检索不可用（自动降级为词法）；向量检索需 PostgreSQL + pgvector。
+  HNSW 索引由迁移 `e5c8f3b2a1d9` 创建（`vector_cosine_ops`），SQLite 下为 no-op。
 - 无 Redis 时幂等/限流/锁是**进程内**语义，多副本会失效，仅适合开发与单副本部署。
 - `users.email` 已由迁移 `d4b7e2a9c1f0` 保证唯一：先把历史重复邮箱归档为 `<email>+dup<id>`
   （保留最早账号），再建立 `lower(email)` 部分唯一索引；归档账号的归属仍需人工确认，不会自动删除。

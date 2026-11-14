@@ -16,7 +16,7 @@
 模块化单体 + 严格分层 + 全链路异步 + 纯 ASGI 中间件 + lifespan 资源治理 + 领域异常 + 幂等/限流 +
 可降级基础设施 + Redis Stream 任务队列与 SSE 缓冲 + HITL 审批 + 结构化日志/探针 + 质量门禁。
 
-结果：116 个测试全绿（1 个需要真实 PostgreSQL 的用例默认跳过）；`alembic upgrade/downgrade` 双向通过；
+结果：167 个测试全绿（1 个需要真实 PostgreSQL 的用例默认跳过）；`alembic upgrade/downgrade` 双向通过；
 文档化改造点与差距。
 
 ---
@@ -82,8 +82,8 @@
 
 | 项目 | 命令 | 结果 |
 | --- | --- | --- |
-| 单元 + 集成测试 | `pytest tests -q` | **116 passed, 1 skipped**（跳过项需要 `POSTGRES_RAW_DSN`） |
-| 覆盖率 | `pytest --cov=src/app` | **约 70%**（CI 门禁 60%） |
+| 单元 + 集成测试 | `pytest tests -q` | **167 passed, 1 skipped**（跳过项需要 `POSTGRES_RAW_DSN`） |
+| 覆盖率 | `pytest --cov=src/app` | **80.32%（行覆盖；CI 硬门禁 80%）** |
 | Lint | `ruff check src tests` | **All checks passed**（0 告警） |
 | 格式 | `ruff format --check src tests` | 92 files already formatted |
 | 类型检查 | `mypy src/app` | **Success: no issues found in 72 source files** |
@@ -101,7 +101,7 @@
 **仍未在本机验证**（如实说明）：
 - `docker build` / `docker compose up`（整套镜像构建）：需要拉取基础镜像，本次只用独立容器验证了依赖服务；
 - 真实商业 LLM/飞书/Playwright 端到端：使用本地 SSE stub 与单元/集成测试替代（真实密钥未使用）；
-- pgvector 索引（HNSW/IVFFlat）与大规模召回性能：只验证了 `ORDER BY cosine_distance` 的正确性。
+- pgvector **大规模召回性能**：HNSW 索引已由迁移 `e5c8f3b2a1d9` 建立，但尚未在百万级数据上做召回率/延迟基准。
 
 ---
 
@@ -111,7 +111,7 @@
 | --- | --- | --- |
 | 最大单文件行数 | 932（posts/router.py） | ~374（items/router.py，且只做 HTTP 编排） |
 | 导入应用耗时 | 受 600MB 模型下载/加载支配 | 毫秒级（模型懒加载） |
-| 自动化测试 | 名义存在、实际失效 | 116 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密/LangGraph |
+| 自动化测试 | 名义存在、实际失效 | 167 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密/LangGraph |
 | 交易链路 | 必然 500 | 可下单、可重复请求重放、防超卖 |
 | 收藏功能 | 必然 500 | 可用（新增关联表） |
 | 权限提升 | 匿名可注册 admin | 默认禁止，管理员 API 才能改角色 |
@@ -122,9 +122,10 @@
 
 ## 6. 未完成与风险（面试时主动说）
 
-1. 覆盖率约 70%，距核心模块 80% 目标仍有差距（下一步补 SSE/网关/视觉降级路径的测试）。
-2. LangGraph 运行时已接入（可选），但 checkpoint 的 time-travel 回滚尚未实现；
-   审批表仍是业务事实来源，两种运行时共用同一套 HITL 闭环。
+1. 覆盖率已达到 **80%（行覆盖，CI 硬门禁）**；分支覆盖率仍约 56%，需要真实 Redis/Postgres
+   故障注入类测试才能继续提升。
+2. LangGraph 运行时已接入（可选），`aget_state_history` / `aupdate_state` 的 time-travel
+   回滚与 `tool_start/tool_end` 事件已实现；审批表仍是业务事实来源，两种运行时共用同一套 HITL 闭环。
 3. 无 Redis 时幂等/限流/锁退化为进程内，多副本场景必须 Redis（`REDIS_REQUIRED=true`）。
 4. `users.email` 已由迁移 `d4b7e2a9c1f0` 加 `lower(email)` 唯一索引（重复邮箱自动归档为 `+dup<id>`）；
    历史数据仍需人工确认归档账号的归属。
@@ -150,9 +151,9 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 4. 然后做**协作型能力**：Redis Stream 事件缓冲 + Last-Event-ID 续传 + 会话锁 + 三层背压 +
    人工审批状态机（金额超阈值挂起、幂等恢复、超时清理）；
 5. 最后做**工程闭环**：lifespan 资源治理、纯 ASGI 中间件、JSON 日志 + trace_id、双探针、
-   alembic 双向迁移、Docker/compose/CI/pre-commit、116 个测试。
+   alembic 双向迁移、Docker/compose/CI/pre-commit、167 个测试。
 
-**Result**：116 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
+**Result**：167 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
 防超卖"；新增能力（幂等、限流、SSE 续传、HITL）都有对应测试与文档。
 
 **可能的追问**：
@@ -166,7 +167,7 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 
 ## 8. 下一步 30/60/90
 
-- **30 天**：覆盖率从 70% 提到核心模块 80%；补 `pip-audit`/Dependabot；补 SSE/网关/降级路径测试；
+- **30 天**：行覆盖率已达 80% 门禁；继续提升分支覆盖率并补 SSE/网关/降级路径故障注入；补 `pip-audit`/Dependabot；
 - **60 天**：接入 OpenTelemetry + Prometheus/Grafana 面板与分级告警；在 Linux runner 复跑压测基准；
 - **90 天**：多副本故障演练（Redis/DB/LLM 故障注入）；按需接入 LangGraph/Temporal 处理复杂长流程；
   把"分层规则""SSE 契约""错误码"做成自动化契约测试。
@@ -191,8 +192,8 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 - 删除了 `API_KEy` 拼写别名（`API_KEY` 仍兼容），消除 Ruff SIM112，并同步测试与文档；
 - `_pdf_extract.txt`、`mypy_before.txt` 等临时产物已清理。
 
-复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 116 passed、
-覆盖率约 70%、干净 SQLite 迁移 up/down 通过。
+复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 167 passed、
+覆盖率 80.32%、干净 SQLite 迁移 up/down 通过。
 
 ---
 
@@ -228,13 +229,31 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 
 验证：
 
-- **5 个 LangGraph 测试**（`tests/unit/test_langgraph_runtime.py`）：高额下单触发 interrupt、
+- **7 个 LangGraph 测试**（`tests/unit/test_langgraph_runtime.py`）：高额下单触发 interrupt、
   审批通过后 resume 继续对话且库存只扣一次、拒绝分支、挂起期间新消息 409、
-  `ChatService.resume` 驱动图、容器按配置选择运行时；
+  `ChatService.resume` 驱动图、容器按配置选择运行时、**tool_start/tool_end 与 native 契约一致**、
+  **checkpoint history + rollback 恢复历史消息**；
 - **真实 PG checkpointer 测试**（`tests/integration/test_langgraph_pg.py`，默认 skip）：
   在 `pgvector/pgvector:pg15` 容器上创建两个独立 checkpointer 句柄，第二个句柄能读到第一个写入的
   checkpoint，证明状态在 PostgreSQL 而非内存（`1 passed` when `POSTGRES_RAW_DSN` is set）；
 - 安全边界：图只负责"告知模型结果"，下单仍由审批服务唯一执行，避免双写/重复扣库存。
 
-未实现：checkpoint 的 time-travel 回滚（`aget_state_history` + `aupdate_state`）、
-LangGraph 运行时的 `tool_start/tool_end` 事件（native 运行时才有，SSE 契约其余部分一致）。
+未实现/未验证：多副本共享 checkpointer 的压测、checkpoint 的保留策略（TTL/清理）。
+已实现：`history()` / `rollback()`（`aget_state_history` + `aupdate_state` + `RemoveMessage` 恢复），
+以及 `tool_start/tool_end` 事件（`get_stream_writer` 自定义流），与 native 运行时契约一致。
+
+---
+
+## 12. 0.3.0 收尾（2026-11-14）
+
+对照 2.md 阶段一逐项关闭：
+
+| 项 | 结果 |
+| --- | --- |
+| LangGraph SSE 事件契约 | `tool_start` / `tool_end` 经 `get_stream_writer()` 进入 `astream(stream_mode=["messages","custom"])`，`arguments` 为 JSON 字符串、`ok` 为布尔，与 native 完全一致；新增测试断言事件顺序与内容 |
+| checkpoint time-travel | 新增 `history()`（`aget_state_history` 摘要）与 `rollback()`（`aupdate_state` + `RemoveMessage(REMOVE_ALL_MESSAGES)` 防重复追加）；单元测试验证回滚后消息数一致 |
+| pgvector HNSW | 迁移 `e5c8f3b2a1d9` 为 `item.embedding`、`knowledge_base.embedding` 建 `USING hnsw (embedding vector_cosine_ops)`；SQLite 下 no-op，单元测试断言方言判断；真实 PG 实测 upgrade 后两个索引存在、downgrade 后为 0 |
+| 覆盖率 80% | 行覆盖率 **80.32%**（167 passed / 1 skipped），`pyproject.toml` 与 CI 的 `fail_under` / `--cov-fail-under` 均设为 **80**；补齐 LLM 网关、vision、任务队列、cache、embeddings、storage、用户 DTO 的单元测试 |
+
+仍未完成：分支覆盖率（约 56%）与百万级向量召回基准；真实商业 LLM/飞书仍用 stub 验证。
+

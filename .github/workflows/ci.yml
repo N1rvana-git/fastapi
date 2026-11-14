@@ -43,8 +43,8 @@ jobs:
       - name: Tests + coverage
         env:
           ENVIRONMENT: test
-        # Ratchet upwards as coverage improves; 80% is the target for core/.
-        run: pytest --cov --cov-report=term-missing --cov-fail-under=60
+        # Release gate: line coverage >= 80% (see pyproject.toml).
+        run: pytest --cov --cov-report=term-missing --cov-fail-under=80
 
   migrations:
     name: Migrations apply cleanly

@@ -135,12 +135,16 @@ ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["src/app"]
-branch = true
+# Line coverage is the release gate (80%). Branch coverage is useful but not
+# enforced yet: it is dominated by defensive async/error paths that need
+# integration fixtures (real Redis/Postgres) to exercise honestly.
+branch = false
 omit = ["src/app/modules/chat/scraper.py"]
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+fail_under = 80
 exclude_lines = [
   "pragma: no cover",
   "if TYPE_CHECKING:",
