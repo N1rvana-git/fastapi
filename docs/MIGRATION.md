@@ -16,6 +16,7 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 # 3) 备份数据库，然后执行迁移（单独一步，不要在应用启动时执行）
 pg_dump ... > backup.sql
 alembic upgrade head
+# 当前 head 为 e5c8f3b2a1d9（含 HNSW 索引；SQLite 下自动 no-op，无需手动处理）
 
 # 4) 后端调用方需要同步改造：注册路径、登录响应、错误体、SSE 请求头
 ```
@@ -184,7 +185,7 @@ alembic downgrade -1          # 回到 c924f1debfb5
 
 ## 7. 未来工作（与本文档相邻）
 
-- 覆盖率门禁从 60% 提高到 80%（0.3.0 起行覆盖率 80.32%，CI 硬门禁）；
+- 覆盖率门禁从 60% 提高到 80%（0.3.0 起行覆盖率 80.27%，CI 硬门禁）；
 - 接入 OpenTelemetry（保留 `trace_id` 上下文即可低成本挂载）；
 - LangGraph 已作为可选运行时提供：`pip install -r requirements-langgraph.txt`，
   设置 `AGENT_RUNTIME=langgraph` 与 `POSTGRES_RAW_DSN`（psycopg3 DSN）即可启用；

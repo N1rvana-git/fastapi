@@ -112,10 +112,37 @@ docker exec xjb-redis redis-cli XINFO GROUPS xianxiaobao:tasks
 
 ## 5. 未覆盖
 
-- 真实商业 LLM（只用了本地 stub）与真实飞书租户；
+- 真实商业 LLM：仅验证了 DeepSeek 与 GLM 网关的连通性/鉴权（见第 6 节），未做业务端到端；
+  真实飞书租户仍未验证（只用测试/stub）；
 - Playwright 爬虫在容器内的浏览器依赖；
 - pgvector **索引**：迁移 `e5c8f3b2a1d9` 已为 `item.embedding` / `knowledge_base.embedding`
   建立 HNSW（`vector_cosine_ops`）索引，SQLite 下 no-op；尚未做百万级召回率/延迟基准；
 - 并发压测已完成（100 并发抢购 + 50 路 SSE，见 [LOAD-TEST-REPORT](LOAD-TEST-REPORT.md)），
   但宿主为 Windows + Docker Desktop，绝对值需在 Linux 环境复测；
 - Docker 镜像构建（`docker build`）未在本次执行，仅验证了容器化依赖服务。
+
+---
+
+## 6. 外部 LLM / embedding 供应商探测（2026-11-14）
+
+用 `.env` 中的真实 key 直接调用官方接口（key 不落盘、不打印）：
+
+| 供应商 | 调用 | 结果 |
+| --- | --- | --- |
+| DeepSeek 官方 | `GET /models` | `deepseek-flash`、`deepseek-v4-pro` |
+| DeepSeek 官方 | `POST /chat/completions`（`deepseek-flash`） | 200 |
+| DeepSeek 官方 | `POST /embeddings` | **404**（官方没有 embedding API） |
+| 网关 `api.zetatechs.com/v1` | `GET /models` | `glm-5.3-flash` |
+| 网关 | `POST /chat/completions`（`glm-5.3-flash`） | 200 |
+| 网关 | `POST /embeddings`（`embedding-2`） | **403** |
+| 网关 | `POST /embeddings`（`glm-5.3-flash`） | **400**（chat 模型不是向量模型） |
+| 网关 | `embedding-3` / `text-embedding-3-small` / `bge-m3` / `glm-embedding-3` | 全部 **403** |
+
+**结论**
+
+1. DeepSeek 官方只能做 chat，不能替代 embedding；
+2. 该网关只开放 `glm-5.3-flash` 对话，未开放 embedding 权限；
+3. embedding 仍使用智谱 bigmodel `embedding-2`（1024 维，需 `ZHIPUAI_API_KEY`）；
+   没有 key 时把 `EMBEDDING_ENABLED=false`，搜索自动退化为关键词匹配；
+4. 配置别名已支持：`DEEPSEEK_* → CHAT_*`、`ZHIPU_KEY → ZHIPUAI_API_KEY`、
+   `ZHIPU_BASE_URL → EMBEDDING_BASE_URL`，`.env` 不需要重复写两套变量。

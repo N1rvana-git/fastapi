@@ -28,10 +28,10 @@
 | 流式 | SSE 裸生成器，无心跳/重连/缓冲控制，长事务持有 DB 连接 | Redis Stream 事件缓冲 + `Last-Event-ID` 续传 + 心跳 + 断线策略 + 短会话 |
 | 异步任务 | Celery（同步 worker，与 async 应用割裂） | 自研 async 任务队列（Redis Stream consumer group + 重试/死信/优雅停机） |
 | 安全 | 匿名可注册为 `admin`；JWT 密钥默认空；上传用原始文件名（路径穿越） | 角色提升受控；密钥启动强校验；uuid 文件名 + 魔数校验 + 大小限制；CORS 白名单 |
-| 质量 | flake8 且 `\|\| true`，测试互相覆盖、断言错 | 167 个测试（unit + integration），ruff/mypy/pre-commit/CI 门禁，迁移双向验证 |
+| 质量 | flake8 且 `\|\| true`，测试互相覆盖、断言错 | 168 个测试（unit + integration），ruff/mypy/pre-commit/CI 门禁，迁移双向验证 |
 
-> 说明：`pytest`（167 passed / 1 skipped）、`ruff check`、`ruff format --check`、`mypy src/app`、真实 uvicorn 冒烟、
-> `alembic upgrade/downgrade` 与 `uv lock` 均已在本机实测通过；覆盖率 **80.32%**（CI 硬门禁 80%）。
+> 说明：`pytest`（168 passed / 1 skipped）、`ruff check`、`ruff format --check`、`mypy src/app`、真实 uvicorn 冒烟、
+> `alembic upgrade/downgrade` 与 `uv lock` 均已在本机实测通过；覆盖率 **80.27%**（CI 硬门禁 80%）。
 > Docker 镜像构建需要可用的 Docker daemon，尚未在本机完成。
 
 ---
@@ -143,6 +143,8 @@ LLM 配置：DeepSeek 官方 API 可直接写 `DEEPSEEK_API_KEY` / `DEEPSEEK_BAS
 `DEEPSEEK_MODEL`（与 `CHAT_*` 等价，二选一即可）。DeepSeek **不提供** `/embeddings`
 接口，语义检索仍需单独的智谱 `ZHIPUAI_API_KEY`（`embedding-2`，1024 维）；
 没有该 key 时设 `EMBEDDING_ENABLED=false`，搜索会自动退化为关键词匹配。
+部分 OpenAI 兼容网关（如只上架 `glm-5.3-flash` 的网关）也只支持 chat，
+调用 `/embeddings` 会返回 403/400，不要把它们配成 embedding base URL。
 
 ### 3.2 完整栈
 
@@ -161,7 +163,7 @@ docker compose logs -f web worker
 ### 3.3 常用命令
 
 ```bash
-make test        # pytest（167 项）
+make test        # pytest（168 项）
 make lint        # ruff check
 make format      # ruff format
 make typecheck   # mypy（CI 硬门禁）
@@ -297,12 +299,12 @@ Agent 调用 create_order → 金额 >= AGENT_APPROVAL_THRESHOLD
 ruff check src/app tests          # lint
 ruff format --check src/app tests # 格式
 mypy src/app                      # 类型检查（0 errors，CI 硬门禁）
-pytest --cov                      # 167 个测试 + 覆盖率（80.32%，门禁 80%）
+pytest --cov                      # 168 个测试 + 覆盖率（80.27%，门禁 80%）
 alembic upgrade head && alembic downgrade base   # 迁移可上可下
 ```
 
 CI（`.github/workflows/ci.yml`）：lint/format/mypy/测试与覆盖率均为硬门禁 → 迁移双向验证 →
-镜像构建推送（仅 push）。本机实测：ruff 0 告警、mypy 0 错误、167 测试全绿、覆盖率 80.32%。
+镜像构建推送（仅 push）。本机实测：ruff 0 告警、mypy 0 错误、168 测试全绿、覆盖率 80.27%。
 
 压测（路线 B）：Locust 100 并发抢购 + 50 路 SSE，脚本在 `scripts/perf/`，方法与复现见
 [LOAD-TEST-REPORT.md](docs/LOAD-TEST-REPORT.md)。热点 5 件库存实测 100 请求 0 失败、

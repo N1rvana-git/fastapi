@@ -215,12 +215,26 @@ redis-cli XINFO GROUPS xianxiaobao:tasks      # pending / consumers
 - checkpointer 表（`checkpoints*`）由 `AsyncPostgresSaver.setup()` 首次启动自动创建；
   清理历史线程时可删除对应 `thread_id` 的行，或在业务侧做定期归档。
 
+### 5.11 LLM / embedding 供应商故障
+
+- **`/embeddings` 返回 404（DeepSeek 官方）**：DeepSeek 只提供 chat，不提供 embedding；
+  不要把 `EMBEDDING_BASE_URL` 指向 `api.deepseek.com`。
+- **`/embeddings` 返回 403（第三方网关）**：网关未给该 key 开放 embedding 权限，或只上架了
+  chat 模型（如 `glm-5.3-flash`）；用 `GET /models` + 一个小请求确认，不要把它当向量模型。
+- **`/embeddings` 返回 400**：通常是把 chat 模型名（`glm-5.3-flash`、`deepseek-flash`）传给了
+  embeddings 接口；换成 `embedding-2` 等向量模型。
+- **没有智谱 key**：设 `EMBEDDING_ENABLED=false`，语义检索会退化为关键词匹配；
+  容器启动日志会出现 `EMBEDDING_ENABLED=true but ZHIPUAI_API_KEY is empty` 警告。
+- **配置别名**：`DEEPSEEK_API_KEY/BASE_URL/MODEL` 等价于 `CHAT_*`；
+  `ZHIPU_KEY` 等价于 `ZHIPUAI_API_KEY`，`ZHIPU_BASE_URL` 等价于 `EMBEDDING_BASE_URL`。
+
 ---
 
 ## 6. 安全运维
 
 - **轮换 SECRET_KEY**：所有已签发 token 立即失效（用户需重新登录）；建议提前公告；
-- **密钥管理**：`SECRET_KEY`、`CHAT_API_KEY`、`ZHIPUAI_API_KEY`、飞书 secret 只进 Secret 管理器，
+- **密钥管理**：`SECRET_KEY`、`CHAT_API_KEY`、`DEEPSEEK_API_KEY`、`ZHIPUAI_API_KEY`、
+  `ZHIPU_KEY`、飞书 secret 只进 Secret 管理器，
   不进 `.env` 仓库文件、不进镜像层；
 - **依赖审计**：在 GitHub 打开 Dependabot / `pip-audit`（建议加入 CI）;
 - **日志脱敏**：连接串已脱敏；不要在业务日志里打印 token/密码/地址全文；

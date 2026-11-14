@@ -16,7 +16,7 @@
 模块化单体 + 严格分层 + 全链路异步 + 纯 ASGI 中间件 + lifespan 资源治理 + 领域异常 + 幂等/限流 +
 可降级基础设施 + Redis Stream 任务队列与 SSE 缓冲 + HITL 审批 + 结构化日志/探针 + 质量门禁。
 
-结果：167 个测试全绿（1 个需要真实 PostgreSQL 的用例默认跳过）；`alembic upgrade/downgrade` 双向通过；
+结果：168 个测试全绿（1 个需要真实 PostgreSQL 的用例默认跳过）；`alembic upgrade/downgrade` 双向通过；
 文档化改造点与差距。
 
 ---
@@ -82,8 +82,8 @@
 
 | 项目 | 命令 | 结果 |
 | --- | --- | --- |
-| 单元 + 集成测试 | `pytest tests -q` | **167 passed, 1 skipped**（跳过项需要 `POSTGRES_RAW_DSN`） |
-| 覆盖率 | `pytest --cov=src/app` | **80.32%（行覆盖；CI 硬门禁 80%）** |
+| 单元 + 集成测试 | `pytest tests -q` | **168 passed, 1 skipped**（跳过项需要 `POSTGRES_RAW_DSN`） |
+| 覆盖率 | `pytest --cov=src/app` | **80.27%（行覆盖；CI 硬门禁 80%）** |
 | Lint | `ruff check src tests` | **All checks passed**（0 告警） |
 | 格式 | `ruff format --check src tests` | 92 files already formatted |
 | 类型检查 | `mypy src/app` | **Success: no issues found in 72 source files** |
@@ -111,7 +111,7 @@
 | --- | --- | --- |
 | 最大单文件行数 | 932（posts/router.py） | ~374（items/router.py，且只做 HTTP 编排） |
 | 导入应用耗时 | 受 600MB 模型下载/加载支配 | 毫秒级（模型懒加载） |
-| 自动化测试 | 名义存在、实际失效 | 167 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密/LangGraph |
+| 自动化测试 | 名义存在、实际失效 | 168 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密/LangGraph |
 | 交易链路 | 必然 500 | 可下单、可重复请求重放、防超卖 |
 | 收藏功能 | 必然 500 | 可用（新增关联表） |
 | 权限提升 | 匿名可注册 admin | 默认禁止，管理员 API 才能改角色 |
@@ -151,9 +151,9 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 4. 然后做**协作型能力**：Redis Stream 事件缓冲 + Last-Event-ID 续传 + 会话锁 + 三层背压 +
    人工审批状态机（金额超阈值挂起、幂等恢复、超时清理）；
 5. 最后做**工程闭环**：lifespan 资源治理、纯 ASGI 中间件、JSON 日志 + trace_id、双探针、
-   alembic 双向迁移、Docker/compose/CI/pre-commit、167 个测试。
+   alembic 双向迁移、Docker/compose/CI/pre-commit、168 个测试。
 
-**Result**：167 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
+**Result**：168 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
 防超卖"；新增能力（幂等、限流、SSE 续传、HITL）都有对应测试与文档。
 
 **可能的追问**：
@@ -192,8 +192,8 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 - 删除了 `API_KEy` 拼写别名（`API_KEY` 仍兼容），消除 Ruff SIM112，并同步测试与文档；
 - `_pdf_extract.txt`、`mypy_before.txt` 等临时产物已清理。
 
-复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 167 passed、
-覆盖率 80.32%、干净 SQLite 迁移 up/down 通过。
+复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 168 passed、
+覆盖率 80.27%、干净 SQLite 迁移 up/down 通过。
 
 ---
 
@@ -253,7 +253,22 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 | LangGraph SSE 事件契约 | `tool_start` / `tool_end` 经 `get_stream_writer()` 进入 `astream(stream_mode=["messages","custom"])`，`arguments` 为 JSON 字符串、`ok` 为布尔，与 native 完全一致；新增测试断言事件顺序与内容 |
 | checkpoint time-travel | 新增 `history()`（`aget_state_history` 摘要）与 `rollback()`（`aupdate_state` + `RemoveMessage(REMOVE_ALL_MESSAGES)` 防重复追加）；单元测试验证回滚后消息数一致 |
 | pgvector HNSW | 迁移 `e5c8f3b2a1d9` 为 `item.embedding`、`knowledge_base.embedding` 建 `USING hnsw (embedding vector_cosine_ops)`；SQLite 下 no-op，单元测试断言方言判断；真实 PG 实测 upgrade 后两个索引存在、downgrade 后为 0 |
-| 覆盖率 80% | 行覆盖率 **80.32%**（167 passed / 1 skipped），`pyproject.toml` 与 CI 的 `fail_under` / `--cov-fail-under` 均设为 **80**；补齐 LLM 网关、vision、任务队列、cache、embeddings、storage、用户 DTO 的单元测试 |
+| 覆盖率 80% | 行覆盖率 **80.27%**（168 passed / 1 skipped），`pyproject.toml` 与 CI 的 `fail_under` / `--cov-fail-under` 均设为 **80**；补齐 LLM 网关、vision、任务队列、cache、embeddings、storage、用户 DTO 的单元测试 |
 
-仍未完成：分支覆盖率（约 56%）与百万级向量召回基准；真实商业 LLM/飞书仍用 stub 验证。
+仍未完成：分支覆盖率（约 56%）与百万级向量召回基准；真实商业 LLM 仅验证了 DeepSeek/GLM 的
+chat 连通性，未做业务端到端。
+
+### 12.1 Embedding 供应商决策（实测）
+
+| 供应商/接口 | 结果 |
+| --- | --- |
+| DeepSeek `GET /models` | `deepseek-flash`、`deepseek-v4-pro` |
+| DeepSeek `POST /embeddings` | 404（官方无 embedding） |
+| GLM 网关 `GET /models` | `glm-5.3-flash`（chat） |
+| GLM 网关 `POST /embeddings`（`embedding-2`） | 403 |
+| GLM 网关 `POST /embeddings`（`glm-5.3-flash`） | 400 |
+
+结论：chat 与 embedding 必须分开选型；embedding 继续用智谱 bigmodel `embedding-2`（1024 维），
+无 key 时关闭 `EMBEDDING_ENABLED` 并退化为关键词检索。配置别名已覆盖
+`DEEPSEEK_* → CHAT_*`、`ZHIPU_KEY → ZHIPUAI_API_KEY`、`ZHIPU_BASE_URL → EMBEDDING_BASE_URL`。
 

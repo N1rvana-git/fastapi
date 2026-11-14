@@ -360,7 +360,7 @@ stateDiagram-v2
 | `structlog` | 未使用 | 依赖未引入；自研 JSON formatter 覆盖相同能力，缺 `bind()` 链式 API |
 | OpenTelemetry 链路追踪 | 未接入 | 无 SDK；保留 `trace_id` 上下文与中间件挂载点，接入成本低 |
 | `mypy` 严格配置全绿 | 已达成（0.2.1） | `mypy src/app` → 0 errors，CI 已移除 `continue-on-error` |
-| 覆盖率 ≥80%（核心模块） | 已达成 | 行覆盖率 **80.32%**，CI 硬门禁 80%；分支覆盖率约 56%，后续提升 |
+| 覆盖率 ≥80%（核心模块） | 已达成 | 行覆盖率 **80.27%**，CI 硬门禁 80%；分支覆盖率约 56%，后续提升 |
 | Granian / uvloop | 未启用 | 镜像默认 uvicorn；Granian 是可选替换（见 RUNBOOK） |
 | Temporal / Taskiq | 未引入 | 自研 Redis Stream 队列满足当前规模；复杂长流程再引入 |
 | LangGraph runtime + checkpointer | 已接入（可选） | `AGENT_RUNTIME=langgraph`，独立 psycopg 池；真实 PG 测试通过，见 §6.4 |
@@ -378,7 +378,7 @@ stateDiagram-v2
 | 架构设计合理性 | 4 | 模块化单体、单向依赖、组合根、领域异常 | 用 `import-linter` 把分层规则变成 CI 门禁 |
 | 性能与可扩展性 | 4 | 全异步、连接池、两级缓存、原子 UPDATE、SSE 背压、压测报告 | 在 Linux runner 复跑基准；热点商品预扣/排队 |
 | 服务治理与稳定性 | 3 | 限流/超时/重试/退避、会话锁、审批超时、优雅停机 | 熔断器（半开/关闭）与降级开关；多副本演练 |
-| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、167 测试、uv.lock、迁移双向 | 分支覆盖率、依赖审计 |
+| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、168 测试、uv.lock、迁移双向 | 分支覆盖率、依赖审计 |
 | 可观测性 | 3 | JSON 日志 + trace_id + 双探针 + 可选指标 | 接入 OTel/Prometheus + Grafana 面板与分级告警 |
 | 安全与合规 | 4 | JWT/密码/RBAC/上传/CORS/错误脱敏 | `pip-audit`、限流分级、敏感字段脱敏展示 |
 | 业务适配与演进能力 | 4 | 新增域只需加目录；任务/工具/审批即插即用 | 写 ADR、补 API 契约测试（Schemathesis） |
@@ -408,6 +408,10 @@ stateDiagram-v2
 
 - SQLite 下 pgvector 语义检索不可用（自动降级为词法）；向量检索需 PostgreSQL + pgvector。
   HNSW 索引由迁移 `e5c8f3b2a1d9` 创建（`vector_cosine_ops`），SQLite 下为 no-op。
+- **Embedding 与 chat 供应商分离**：DeepSeek 官方无 `/embeddings`（404）；部分 OpenAI 兼容网关
+  只开放 chat（`gemini/glm`），embeddings 返回 403/400。生产使用智谱 `embedding-2`（1024 维）
+  或等价的 OpenAI-compatible 向量接口；无 key 时 `EMBEDDING_ENABLED=false` 退化为关键词检索。
+  别名：`ZHIPU_KEY → ZHIPUAI_API_KEY`、`ZHIPU_BASE_URL → EMBEDDING_BASE_URL`。
 - 无 Redis 时幂等/限流/锁是**进程内**语义，多副本会失效，仅适合开发与单副本部署。
 - `users.email` 已由迁移 `d4b7e2a9c1f0` 保证唯一：先把历史重复邮箱归档为 `<email>+dup<id>`
   （保留最早账号），再建立 `lower(email)` 部分唯一索引；归档账号的归属仍需人工确认，不会自动删除。
