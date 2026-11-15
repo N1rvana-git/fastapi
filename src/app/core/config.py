@@ -142,6 +142,8 @@ class Settings(BaseSettings):
     AGENT_APPROVAL_THRESHOLD: float = Field(default=1000.0, ge=0)
     AGENT_APPROVAL_TTL_HOURS: int = Field(default=24, ge=1)
     AGENT_CONTEXT_MESSAGES: int = Field(default=8, ge=1, le=100)
+    AGENT_MEMORY_ENABLED: bool = True
+    AGENT_MEMORY_LOOKBACK: int = Field(default=24, ge=2, le=200)
     AGENT_STREAM_TTL_SECONDS: int = Field(default=600, ge=30)
     AGENT_STREAM_MAXLEN: int = Field(default=2000, ge=10)
     AGENT_THREAD_LOCK_TTL: int = Field(default=30, ge=5)

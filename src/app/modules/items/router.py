@@ -207,7 +207,7 @@ async def search_items_by_text(
     _: None = Depends(rate_limit("search-text", limit=30, window_seconds=60)),
 ) -> ImageSearchResponse:
     container = request.app.state.container
-    hits, mode = await items_service.search_by_text(
+    hits, mode = await items_service.search_by_text_hybrid(
         session,
         payload.query_text,
         embeddings=container.embeddings,
@@ -216,7 +216,7 @@ async def search_items_by_text(
     )
     return ImageSearchResponse(
         message=f"为您找到与 '{payload.query_text}' 相关的商品",
-        data=[_hit(item, score) for item, score in hits],
+        data=[_hit(hit.item, hit.score, hit.match_reason) for hit in hits],
         mode=mode,
     )
 
@@ -394,9 +394,11 @@ async def _read_all(file: UploadFile) -> bytes:
     return await file.read()
 
 
-def _hit(item: object, score: float) -> ItemSearchHit:
+def _hit(item: object, score: float, match_reason: str | None = None) -> ItemSearchHit:
     base = ItemRead.model_validate(item)
-    return ItemSearchHit(**base.model_dump(), score=round(float(score), 4))
+    return ItemSearchHit(
+        **base.model_dump(), score=round(float(score), 4), match_reason=match_reason
+    )
 
 
 __all__ = ["router"]

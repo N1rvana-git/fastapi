@@ -21,6 +21,7 @@ from src.app.modules.items import repository
 from src.app.modules.items.models import ItemModel, TagModel
 from src.app.modules.items.schemas import ItemCreate, ItemUpdate
 from src.app.modules.users.models import UserModel
+from src.app.shared.hybrid_rrf import HybridHit
 
 logger = get_logger(__name__)
 
@@ -183,6 +184,65 @@ async def search_by_image(
     return scored[:limit], "python"
 
 
+async def search_by_text_hybrid(
+    session: AsyncSession,
+    text: str,
+    *,
+    embeddings: Any,
+    vision: Any,
+    limit: int = 5,
+    keyword: str | None = None,
+    category: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    sort_by: str = "relevance",
+) -> tuple[list[HybridHit[ItemModel]], str]:
+    """Hybrid retrieval: vector leg + keyword/structured leg fused with RRF."""
+
+    cleaned = (text or keyword or "").strip()
+    if not cleaned:
+        raise ValidationError("搜索内容不能为空")
+
+    vector: list[float] | None = None
+    if (
+        embeddings is not None
+        and getattr(embeddings, "enabled", False)
+        and session.bind is not None
+        and session.bind.dialect.name == "postgresql"
+    ):
+        vector = await embeddings.embed(cleaned)
+
+    hits = await repository.hybrid_search(
+        session,
+        keyword=keyword or cleaned,
+        vector=vector,
+        category=category,
+        min_price=min_price,
+        max_price=max_price,
+        sort_by=sort_by,
+        limit=limit,
+    )
+
+    # CLIP cross-modal fallback only when neither retriever found anything.
+    if not hits and vision is not None and getattr(vision, "available", False):
+        vector = await vision.text_embedding(cleaned)
+        items = await repository.list_with_image_embedding(session)
+        scored = _score_candidates(vector, items, attribute="image_embedding")
+        if scored:
+            return [
+                HybridHit(
+                    item=item,
+                    score=score,
+                    semantic_rank=rank,
+                    lexical_rank=None,
+                    match_reason="semantic",
+                )
+                for rank, (item, score) in enumerate(scored[:limit], start=1)
+            ], "python"
+
+    return hits, "hybrid" if vector is not None else "lexical"
+
+
 async def search_by_text(
     session: AsyncSession,
     text: str,
@@ -191,33 +251,10 @@ async def search_by_text(
     vision: Any,
     limit: int = 5,
 ) -> tuple[list[tuple[ItemModel, float]], str]:
-    cleaned = text.strip()
-    if not cleaned:
-        raise ValidationError("搜索内容不能为空")
-
-    # Preferred path: real pgvector ANN search over text embeddings.
-    if (
-        embeddings is not None
-        and getattr(embeddings, "enabled", False)
-        and session.bind is not None
-        and session.bind.dialect.name == "postgresql"
-    ):
-        vector = await embeddings.embed(cleaned)
-        rows = await repository.search_by_text_embedding(session, vector, limit=limit)
-        if rows:
-            return rows, "pgvector"
-
-    # Cross-modal fallback (text vector vs. image vectors) when CLIP is present.
-    if vision is not None and getattr(vision, "available", False):
-        vector = await vision.text_embedding(cleaned)
-        items = await repository.list_with_image_embedding(session)
-        scored = _score_candidates(vector, items, attribute="image_embedding")
-        if scored:
-            return scored[:limit], "python"
-
-    # Last resort: lexical search, so the endpoint still returns something useful.
-    items, _ = await repository.list_items(session, skip=0, limit=limit, search=cleaned)
-    return [(item, 0.0) for item in items], "lexical"
+    hits, mode = await search_by_text_hybrid(
+        session, text, embeddings=embeddings, vision=vision, limit=limit
+    )
+    return [(hit.item, hit.score) for hit in hits], mode
 
 
 def _score_candidates(
@@ -288,6 +325,7 @@ __all__ = [
     "list_tags",
     "search_by_image",
     "search_by_text",
+    "search_by_text_hybrid",
     "toggle_favourite",
     "update_item",
 ]

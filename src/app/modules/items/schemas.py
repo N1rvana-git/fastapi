@@ -112,6 +112,9 @@ class TextSearchRequest(BaseModel):
 
 class ItemSearchHit(ItemRead):
     score: float | None = Field(default=None, description="Cosine similarity (higher is better)")
+    match_reason: str | None = Field(
+        default=None, description="semantic | lexical | hybrid（混合检索的匹配依据）"
+    )
 
 
 class ImageSearchResponse(BaseModel):

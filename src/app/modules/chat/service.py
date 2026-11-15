@@ -37,6 +37,7 @@ from src.app.core.idempotency import (
 )
 from src.app.core.logging import get_logger, log_extra
 from src.app.modules.chat import approvals
+from src.app.modules.chat.memory import build_chat_context
 from src.app.modules.chat.models import ChatRecord
 from src.app.modules.chat.prompts import build_system_prompt
 from src.app.modules.chat.stream import (
@@ -465,22 +466,31 @@ class ChatService:
 
     async def _build_messages(self, ctx: ChatRequestContext) -> list[dict[str, Any]]:
         settings = self.deps.settings
+        lookback = (
+            settings.AGENT_MEMORY_LOOKBACK
+            if settings.AGENT_MEMORY_ENABLED
+            else settings.AGENT_CONTEXT_MESSAGES
+        )
         async with self.deps.database.session() as session:
             stmt = (
                 select(ChatRecord)
                 .where(ChatRecord.user_id == ctx.user.id, ChatRecord.thread_id == ctx.thread_id)
                 .order_by(desc(ChatRecord.id))
-                .limit(settings.AGENT_CONTEXT_MESSAGES)
+                .limit(lookback)
             )
             records = list((await session.execute(stmt)).scalars().all())
         records.reverse()
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": build_system_prompt(ctx.user.username)}
+        raw_messages: list[dict[str, Any]] = [
+            {"role": record.role, "content": record.content}
+            for record in records
+            if record.role in {"user", "assistant"} and record.content
         ]
-        for record in records:
-            if record.role in {"user", "assistant"} and record.content:
-                messages.append({"role": record.role, "content": record.content})
-        return messages
+        system_prompt = build_system_prompt(ctx.user.username)
+        if not settings.AGENT_MEMORY_ENABLED:
+            return [{"role": "system", "content": system_prompt}, *raw_messages]
+        return build_chat_context(
+            system_prompt, raw_messages, window=settings.AGENT_CONTEXT_MESSAGES
+        )
 
     async def _event_stream(
         self,

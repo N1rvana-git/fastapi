@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -65,34 +65,89 @@ class ToolSpec:
 # --------------------------------------------------------------------------- #
 # Handlers
 # --------------------------------------------------------------------------- #
-async def _search_platform_products(ctx: ToolContext, query: str) -> str:
+async def _search_platform_products(
+    ctx: ToolContext,
+    query: str,
+    *,
+    keyword: str | None = None,
+    category: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    sort_by: str = "relevance",
+) -> str:
     async with ctx.deps.database.session() as session:
-        hits, mode = await items_service.search_by_text(
+        hits, mode = await items_service.search_by_text_hybrid(
             session,
             query,
             embeddings=ctx.deps.embeddings,
             vision=ctx.deps.vision,
             limit=5,
+            keyword=keyword,
+            category=category,
+            min_price=min_price,
+            max_price=max_price,
+            sort_by=sort_by,
         )
+        filters = {
+            "keyword": keyword,
+            "category": category,
+            "min_price": min_price,
+            "max_price": max_price,
+            "sort_by": sort_by,
+        }
         if not hits:
-            return "平台当前没有匹配的在售商品。"
-        lines = [
-            f"ID:{item.id} | {item.name} | ￥{item.price:.2f} | 库存:{item.inventory} | 标签:"
-            f"{','.join(tag.name for tag in item.tags) or '无'}"
-            for item, _score in hits
+            return json.dumps(
+                {
+                    "status": "empty",
+                    "mode": mode,
+                    "query": query,
+                    "filters": filters,
+                    "results": [],
+                },
+                ensure_ascii=False,
+            )
+        results = [
+            {
+                "id": hit.item.id,
+                "name": hit.item.name,
+                "price": hit.item.price,
+                "inventory": hit.item.inventory,
+                "tags": [tag.name for tag in hit.item.tags],
+                "match_reason": hit.match_reason,
+                "score": round(hit.score, 6),
+            }
+            for hit in hits
         ]
-        return _truncate(f"检索方式:{mode}\n平台在售商品：\n" + "\n".join(lines))
+        return _truncate(
+            json.dumps(
+                {"status": "ok", "mode": mode, "filters": filters, "results": results},
+                ensure_ascii=False,
+            )
+        )
 
 
 async def _search_platform_policy(ctx: ToolContext, query: str) -> str:
     async with ctx.deps.database.session() as session:
-        docs, mode = await knowledge_service.search_policy(
+        hits, mode = await knowledge_service.search_policy_hybrid(
             session, query, embeddings=ctx.deps.embeddings, limit=3
         )
-        if not docs:
-            return "知识库暂未收录相关规则，请建议用户联系人工客服。"
-        snippets = [f"《{doc.title}》：{(doc.content or '')[:260]}" for doc in docs]
-        return _truncate(f"检索方式:{mode}\n平台规则：\n" + "\n".join(snippets))
+        if not hits:
+            return json.dumps(
+                {"status": "empty", "mode": mode, "query": query, "results": []},
+                ensure_ascii=False,
+            )
+        results = [
+            {
+                "title": hit.item.title,
+                "content": (hit.item.content or "")[:260],
+                "match_reason": hit.match_reason,
+                "score": round(hit.score, 6),
+            }
+            for hit in hits
+        ]
+        return _truncate(
+            json.dumps({"status": "ok", "mode": mode, "results": results}, ensure_ascii=False)
+        )
 
 
 async def _search_web_price(ctx: ToolContext, item_name: str) -> str:
@@ -173,16 +228,30 @@ async def _create_order(
 # Registry
 # --------------------------------------------------------------------------- #
 TOOL_SPECS: dict[str, ToolSpec] = {
-    "search_platform_products": ToolSpec(
-        name="search_platform_products",
+    "search_items": ToolSpec(
+        name="search_items",
         description=(
-            "检索平台真实在售库存（支持语义搜索）。当用户询问有什么商品、想买某类商品、"
-            "请求推荐时必须调用，禁止编造商品和价格。"
+            "检索平台真实在售库存（混合检索：语义 + 关键词 + 结构化过滤 + RRF 重排）。"
+            "当用户想买某类商品、请求推荐、比价时调用。必须把模糊口语拆成结构化参数："
+            "例如“两千左右打CS2的显示器” → query='适合打CS2的显示器'、category='显示器'、"
+            "max_price=2000。禁止编造商品和价格。"
         ),
         parameters={
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "商品名称、特征或需求描述"},
+                "query": {
+                    "type": "string",
+                    "description": "用于语义检索的需求描述（保留用途/场景，不要只填类目）",
+                },
+                "keyword": {"type": "string", "description": "可选的关键词/品牌/型号"},
+                "category": {"type": "string", "description": "可选的商品类目，如显示器、手机"},
+                "min_price": {"type": "number", "minimum": 0, "description": "最低价（元）"},
+                "max_price": {"type": "number", "minimum": 0, "description": "最高价（元）"},
+                "sort_by": {
+                    "type": "string",
+                    "enum": ["relevance", "price_asc", "price_desc", "newest"],
+                    "default": "relevance",
+                },
             },
             "required": ["query"],
             "additionalProperties": False,
@@ -245,7 +314,14 @@ TOOL_SPECS: dict[str, ToolSpec] = {
 }
 
 
-def openai_tools() -> list[dict[str, Any]]:
+def openai_tools(names: Sequence[str] | None = None) -> list[dict[str, Any]]:
+    """JSON-schema tools, optionally restricted to an intent's allow-list."""
+
+    selected = (
+        list(TOOL_SPECS.values())
+        if names is None
+        else [TOOL_SPECS[name] for name in names if name in TOOL_SPECS]
+    )
     return [
         {
             "type": "function",
@@ -255,14 +331,89 @@ def openai_tools() -> list[dict[str, Any]]:
                 "parameters": spec.parameters,
             },
         }
-        for spec in TOOL_SPECS.values()
+        for spec in selected
     ]
+
+
+_JSON_TYPES: dict[str, tuple[type[Any], ...]] = {
+    "string": (str,),
+    "integer": (int,),
+    "number": (int, float),
+    "boolean": (bool,),
+    "object": (dict,),
+    "array": (list,),
+}
+
+
+def validate_tool_arguments(name: str, arguments: Any) -> list[str]:
+    """Validate a tool call against its JSON schema (the subset we use).
+
+    LLMs occasionally send strings for numbers or invent extra keys; catching it
+    here returns a structured ``INVALID_ARGUMENTS`` observation instead of a
+    Python ``TypeError`` deep in a handler, which is also what the reflection
+    loop uses to ask the model to fix the call.
+    """
+
+    spec = TOOL_SPECS.get(name)
+    if spec is None:
+        return [f"unknown tool: {name}"]
+    if not isinstance(arguments, dict):
+        return ["arguments must be a JSON object"]
+
+    issues: list[str] = []
+    schema = spec.parameters
+    properties = schema.get("properties") or {}
+    for required in schema.get("required") or []:
+        if required not in arguments:
+            issues.append(f"missing required field: {required}")
+
+    if schema.get("additionalProperties") is False:
+        for key in arguments:
+            if key not in properties:
+                issues.append(f"unexpected field: {key}")
+
+    for key, value in arguments.items():
+        rule = properties.get(key)
+        if not isinstance(rule, dict):
+            continue
+        expected = rule.get("type")
+        if expected in _JSON_TYPES:
+            allowed = _JSON_TYPES[expected]
+            if isinstance(value, bool) and expected in {"integer", "number"}:
+                issues.append(f"{key} must be {expected}")
+                continue
+            if not isinstance(value, allowed):
+                issues.append(f"{key} must be {expected}")
+                continue
+        if "enum" in rule and value not in rule["enum"]:
+            issues.append(f"{key} must be one of {rule['enum']}")
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            if "minimum" in rule and value < rule["minimum"]:
+                issues.append(f"{key} must be >= {rule['minimum']}")
+            if "maximum" in rule and value > rule["maximum"]:
+                issues.append(f"{key} must be <= {rule['maximum']}")
+    return issues
 
 
 async def execute_tool(name: str, arguments: dict[str, Any], ctx: ToolContext) -> str:
     spec = TOOL_SPECS.get(name)
     if spec is None:
         return json.dumps({"status": "error", "message": f"未知工具: {name}"}, ensure_ascii=False)
+
+    issues = validate_tool_arguments(name, arguments)
+    if issues:
+        logger.warning("tool %s rejected arguments %s: %s", name, arguments, issues)
+        return json.dumps(
+            {
+                "status": "error",
+                "code": "INVALID_ARGUMENTS",
+                "message": "工具参数不合法，请修正参数后重试",
+                "issues": issues,
+                "arguments": arguments,
+            },
+            ensure_ascii=False,
+        )
+
     try:
         return await spec.handler(ctx, **arguments)
     except ApprovalRequiredError:
@@ -292,4 +443,5 @@ __all__ = [
     "ToolSpec",
     "execute_tool",
     "openai_tools",
+    "validate_tool_arguments",
 ]

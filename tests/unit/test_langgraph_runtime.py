@@ -389,6 +389,75 @@ async def test_checkpoint_history_and_rollback(
 
 
 @pytest.mark.asyncio
+async def test_search_items_empty_result_gets_reflection_in_langgraph(
+    started_app: Any, settings: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+
+    async def empty_tool(_name: str, _args: dict[str, Any], _ctx: Any) -> str:
+        return json.dumps({"status": "empty", "results": []})
+
+    monkeypatch.setattr("src.app.modules.chat.runtime_langgraph.execute_tool", empty_tool)
+
+    async with started_app.state.container.database.session() as session:
+        buyer = await users_repository.get_by_email(session, "graph-events@example.com")
+        if buyer is None:
+            from src.app.modules.users.models import UserModel
+
+            buyer = UserModel(
+                email="graph-events@example.com",
+                username="graph-events",
+                age=18,
+                hashed_password="x",
+                role="user",
+            )
+            session.add(buyer)
+            await session.commit()
+            await session.refresh(buyer)
+
+    runtime = await _runtime(
+        started_app,
+        settings,
+        [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "search_items",
+                        "args": {"query": "显示器", "max_price": 2000},
+                        "id": "call_search_1",
+                    }
+                ],
+            ),
+            AIMessage(content="我帮您放宽预算再找找"),
+        ],
+    )
+    thread_id = f"u{buyer.id}:graph-reflection"
+    events = [
+        event
+        async for event in runtime.run(
+            user_id=buyer.id,
+            user_name=buyer.username,
+            thread_id=thread_id,
+            messages=[{"role": "user", "content": "预算 2000 想买显示器"}],
+            cancel_event=asyncio.Event(),
+        )
+    ]
+    assert events[0].type == "intent"
+    assert events[0].data["intent"] == "shopping_search"
+    assert any(event.type == "tool_start" for event in events)
+    assert any(event.type == "tool_end" for event in events)
+
+    state = await runtime.graph.aget_state({"configurable": {"thread_id": thread_id}})
+    assert state.values["reflections"] == {"search_items": 1}
+    tool_messages = [
+        message for message in state.values["messages"] if getattr(message, "type", "") == "tool"
+    ]
+    payload = json.loads(tool_messages[0].content)
+    assert "放宽价格上下限" in payload["reflection_hint"]
+
+
+@pytest.mark.asyncio
 async def test_container_selects_langgraph_runtime_when_configured(settings: Any) -> None:
     from src.app.main import create_app
 

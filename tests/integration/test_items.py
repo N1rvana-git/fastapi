@@ -211,6 +211,7 @@ async def test_text_search_falls_back_to_lexical(
     body = response.json()
     assert body["mode"] == "lexical"
     assert [item["name"] for item in body["data"]] == ["罗技机械键盘"]
+    assert body["data"][0]["match_reason"] == "lexical"
 
 
 @pytest.mark.asyncio

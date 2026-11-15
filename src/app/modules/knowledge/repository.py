@@ -6,6 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.modules.knowledge.models import KnowledgeModel
+from src.app.shared.hybrid_rrf import HybridHit, fuse_ranked
 
 
 async def search_lexical(
@@ -39,6 +40,28 @@ async def list_all(session: AsyncSession, *, limit: int = 100) -> list[Knowledge
     return list((await session.execute(select(KnowledgeModel).limit(limit))).scalars().all())
 
 
+async def hybrid_search(
+    session: AsyncSession,
+    query: str,
+    *,
+    vector: list[float] | None = None,
+    limit: int = 3,
+    pool_size: int = 10,
+) -> list[HybridHit[KnowledgeModel]]:
+    cleaned = query.strip()
+    if not cleaned:
+        return []
+
+    semantic_docs: list[KnowledgeModel] = []
+    if vector is not None:
+        semantic_rows = await search_by_embedding(session, vector, limit=max(pool_size, limit))
+        semantic_docs = [doc for doc, _score in semantic_rows]
+
+    lexical_docs = await search_lexical(session, cleaned, limit=max(pool_size, limit))
+    fused = fuse_ranked(semantic_docs, lexical_docs, key=lambda doc: doc.id)
+    return fused[:limit]
+
+
 async def create(session: AsyncSession, doc: KnowledgeModel) -> KnowledgeModel:
     session.add(doc)
     await session.commit()
@@ -46,4 +69,4 @@ async def create(session: AsyncSession, doc: KnowledgeModel) -> KnowledgeModel:
     return doc
 
 
-__all__ = ["create", "list_all", "search_by_embedding", "search_lexical"]
+__all__ = ["create", "hybrid_search", "list_all", "search_by_embedding", "search_lexical"]

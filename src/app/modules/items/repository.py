@@ -8,11 +8,14 @@ silently ignores.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.app.modules.items.models import ItemModel, TagModel, favourites
+from src.app.shared.hybrid_rrf import HybridHit, fuse_ranked
 
 
 async def list_items(
@@ -110,23 +113,116 @@ async def set_embedding(session: AsyncSession, item_id: int, vector: list[float]
 
 
 async def search_by_text_embedding(
-    session: AsyncSession, vector: list[float], *, limit: int = 5
+    session: AsyncSession,
+    vector: list[float],
+    *,
+    limit: int = 5,
+    keyword: str | None = None,
+    category: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
 ) -> list[tuple[ItemModel, float]]:
     """pgvector cosine search. Caller must ensure the dialect is PostgreSQL."""
 
     distance = ItemModel.embedding.cosine_distance(vector)
     stmt = (
         select(ItemModel, distance.label("distance"))
-        .where(
-            ItemModel.is_offer.is_(True),
-            ItemModel.inventory > 0,
-            ItemModel.embedding.is_not(None),
-        )
+        .where(*_item_filters(keyword, category, min_price, max_price))
+        .where(ItemModel.embedding.is_not(None))
         .order_by(distance)
         .limit(limit)
     )
     rows = (await session.execute(stmt)).all()
     return [(row[0], float(1.0 - row[1])) for row in rows]
+
+
+def _item_filters(
+    keyword: str | None,
+    category: str | None,
+    min_price: float | None,
+    max_price: float | None,
+) -> list[Any]:
+    filters: list[Any] = [ItemModel.is_offer.is_(True), ItemModel.inventory > 0]
+    if keyword:
+        pattern = f"%{keyword.strip()}%"
+        filters.append(or_(ItemModel.name.ilike(pattern), ItemModel.image_path.ilike(pattern)))
+    if category:
+        pattern = f"%{category.strip()}%"
+        filters.append(ItemModel.tags.any(TagModel.name.ilike(pattern)))
+    if min_price is not None:
+        filters.append(ItemModel.price >= min_price)
+    if max_price is not None:
+        filters.append(ItemModel.price <= max_price)
+    return filters
+
+
+async def search_lexical_hybrid(
+    session: AsyncSession,
+    *,
+    keyword: str | None,
+    category: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    sort_by: str = "relevance",
+    limit: int = 10,
+) -> list[ItemModel]:
+    """Keyword + structured filter leg of hybrid retrieval."""
+
+    stmt = select(ItemModel).where(*_item_filters(keyword, category, min_price, max_price))
+    if sort_by == "price_asc":
+        stmt = stmt.order_by(ItemModel.price.asc(), ItemModel.id.desc())
+    elif sort_by == "price_desc":
+        stmt = stmt.order_by(ItemModel.price.desc(), ItemModel.id.desc())
+    elif sort_by == "newest":
+        stmt = stmt.order_by(ItemModel.id.desc())
+    else:
+        stmt = stmt.order_by(ItemModel.id.desc())
+    stmt = stmt.limit(limit)
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def hybrid_search(
+    session: AsyncSession,
+    *,
+    keyword: str | None,
+    vector: list[float] | None = None,
+    category: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    sort_by: str = "relevance",
+    limit: int = 5,
+    pool_size: int = 15,
+) -> list[HybridHit[ItemModel]]:
+    """Run semantic + lexical retrieval and fuse them with RRF.
+
+    ``pool_size`` is the per-retriever candidate depth; it must be larger than
+    ``limit`` so the fusion has enough material to rerank.
+    """
+
+    semantic_items: list[ItemModel] = []
+    if vector is not None:
+        semantic_rows = await search_by_text_embedding(
+            session,
+            vector,
+            limit=max(pool_size, limit),
+            keyword=keyword,
+            category=category,
+            min_price=min_price,
+            max_price=max_price,
+        )
+        semantic_items = [item for item, _score in semantic_rows]
+
+    lexical_items = await search_lexical_hybrid(
+        session,
+        keyword=keyword,
+        category=category,
+        min_price=min_price,
+        max_price=max_price,
+        sort_by=sort_by,
+        limit=max(pool_size, limit),
+    )
+    fused = fuse_ranked(semantic_items, lexical_items, key=lambda item: item.id)
+    return fused[:limit]
 
 
 async def list_with_image_embedding(session: AsyncSession) -> list[ItemModel]:
@@ -210,11 +306,13 @@ __all__ = [
     "get_tag_by_id",
     "get_tag_by_name",
     "get_tags_by_ids",
+    "hybrid_search",
     "list_for_owner",
     "list_items",
     "list_tags",
     "list_with_image_embedding",
     "search_by_text_embedding",
+    "search_lexical_hybrid",
     "set_embedding",
     "toggle_favourite",
     "update_fields",

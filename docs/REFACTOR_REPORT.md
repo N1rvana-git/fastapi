@@ -16,7 +16,7 @@
 模块化单体 + 严格分层 + 全链路异步 + 纯 ASGI 中间件 + lifespan 资源治理 + 领域异常 + 幂等/限流 +
 可降级基础设施 + Redis Stream 任务队列与 SSE 缓冲 + HITL 审批 + 结构化日志/探针 + 质量门禁。
 
-结果：168 个测试全绿（1 个需要真实 PostgreSQL 的用例默认跳过）；`alembic upgrade/downgrade` 双向通过；
+结果：209 个测试全绿（1 个需要真实 PostgreSQL 的用例默认跳过）；`alembic upgrade/downgrade` 双向通过；
 文档化改造点与差距。
 
 ---
@@ -82,8 +82,8 @@
 
 | 项目 | 命令 | 结果 |
 | --- | --- | --- |
-| 单元 + 集成测试 | `pytest tests -q` | **168 passed, 1 skipped**（跳过项需要 `POSTGRES_RAW_DSN`） |
-| 覆盖率 | `pytest --cov=src/app` | **80.27%（行覆盖；CI 硬门禁 80%）** |
+| 单元 + 集成测试 | `pytest tests -q` | **209 passed, 1 skipped**（跳过项需要 `POSTGRES_RAW_DSN`） |
+| 覆盖率 | `pytest --cov=src/app` | **82.66%（行覆盖；CI 硬门禁 80%）** |
 | Lint | `ruff check src tests` | **All checks passed**（0 告警） |
 | 格式 | `ruff format --check src tests` | 92 files already formatted |
 | 类型检查 | `mypy src/app` | **Success: no issues found in 72 source files** |
@@ -111,7 +111,7 @@
 | --- | --- | --- |
 | 最大单文件行数 | 932（posts/router.py） | ~374（items/router.py，且只做 HTTP 编排） |
 | 导入应用耗时 | 受 600MB 模型下载/加载支配 | 毫秒级（模型懒加载） |
-| 自动化测试 | 名义存在、实际失效 | 168 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密/LangGraph |
+| 自动化测试 | 名义存在、实际失效 | 209 个，覆盖核心链路与并发/幂等/审批/迁移/飞书加密/LangGraph/混合检索/评测 |
 | 交易链路 | 必然 500 | 可下单、可重复请求重放、防超卖 |
 | 收藏功能 | 必然 500 | 可用（新增关联表） |
 | 权限提升 | 匿名可注册 admin | 默认禁止，管理员 API 才能改角色 |
@@ -151,9 +151,9 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 4. 然后做**协作型能力**：Redis Stream 事件缓冲 + Last-Event-ID 续传 + 会话锁 + 三层背压 +
    人工审批状态机（金额超阈值挂起、幂等恢复、超时清理）；
 5. 最后做**工程闭环**：lifespan 资源治理、纯 ASGI 中间件、JSON 日志 + trace_id、双探针、
-   alembic 双向迁移、Docker/compose/CI/pre-commit、168 个测试。
+   alembic 双向迁移、Docker/compose/CI/pre-commit、209 个测试。
 
-**Result**：168 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
+**Result**：209 测试全绿、迁移可上可下、真实 uvicorn 冒烟通过；核心链路从"必然 500"变为"可下单、可重试、
 防超卖"；新增能力（幂等、限流、SSE 续传、HITL）都有对应测试与文档。
 
 **可能的追问**：
@@ -192,8 +192,8 @@ import 即加载大模型、同步 SDK 阻塞事件循环、下单/收藏接口�
 - 删除了 `API_KEy` 拼写别名（`API_KEY` 仍兼容），消除 Ruff SIM112，并同步测试与文档；
 - `_pdf_extract.txt`、`mypy_before.txt` 等临时产物已清理。
 
-复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 168 passed、
-覆盖率 80.27%、干净 SQLite 迁移 up/down 通过。
+复跑结果：`ruff check` 0、`ruff format --check` 通过、`mypy src/app` 0、`pytest` 209 passed、
+覆盖率 82.66%、干净 SQLite 迁移 up/down 通过。
 
 ---
 
@@ -271,4 +271,27 @@ chat 连通性，未做业务端到端。
 结论：chat 与 embedding 必须分开选型；embedding 继续用智谱 bigmodel `embedding-2`（1024 维），
 无 key 时关闭 `EMBEDDING_ENABLED` 并退化为关键词检索。配置别名已覆盖
 `DEEPSEEK_* → CHAT_*`、`ZHIPU_KEY → ZHIPUAI_API_KEY`、`ZHIPU_BASE_URL → EMBEDDING_BASE_URL`。
+
+---
+
+## 13. 0.4.0 Agent 认知与评测 Harness 升级（2026-11-15）
+
+| 特性 | 实现 | 验证 |
+| --- | --- | --- |
+| 混合检索 + RRF | 新增 `shared/hybrid_rrf.py`（`fuse_ranked`，`k=60`）；`items`/`knowledge` repository 增加 `hybrid_search`，同时跑语义 Top-K 与关键词/结构化 Top-K，输出 `match_reason`（semantic/lexical/hybrid）；`ItemSearchHit` 与 Agent 工具结果都带该字段 | RRF 纯函数 5 个边界测试；SQLite 真实行测试过滤/排序/lexical 标记；API 文本搜索断言 `match_reason=lexical` |
+| 查询改写 Schema | `search_items` 支持 `query/keyword/category/min_price/max_price/sort_by`，Prompt 明确把“两千左右打 CS2 的显示器”拆成结构化参数 | `test_tool_validation.py` 断言 Schema 字段、enum、非法类型/缺字段/额外字段 |
+| 意图分流 | 新增 `chat/intent.py`；native 与 LangGraph 在进入主循环前分类，按意图裁剪工具；新增 SSE `intent` 事件，原 `tool_start/tool_end` 兼容 | 意图参数化测试；native/LangGraph 测试断言 `intent` 事件与工具子集 |
+| 自愈反思 | 新增 `chat/reflection.py`；空结果/参数错误注入 `reflection_hint`（含放宽 20%、最多重试 1 次），native 与 LangGraph 都维护重试计数 | 空结果/非法参数测试；native 断言第二次 LLM 调用能看到 hint；LangGraph 断言 state `reflections` |
+| 买家画像短期记忆 | 新增 `chat/memory.py`；早期消息提炼 `BuyerMemory`（预算/类目/地址/拒绝商品/摘要），拼进 System Prompt 固定尾部槽位，静态前缀不变；`AGENT_MEMORY_ENABLED` / `AGENT_MEMORY_LOOKBACK` | 规则提取、中文金额、压缩窗口、稳定前缀测试 |
+| 离线评测 Harness | 新增 `chat/eval_harness.py`：12 条 Golden Cases，5 项指标，JSON/Markdown 报告，`python -m ...` CLI | `test_agent_eval_harness.py` 断言 12 条用例、五项指标 100%、CLI 输出与确定性 |
+
+**验证结果**：209 passed / 1 skipped，行覆盖率 **82.66%**（CI 门禁 80%），`ruff check` 0、
+`ruff format --check` 通过、`mypy src/app` 0（81 files）。
+
+**边界与诚实说明**：
+- 意图分类是**确定性规则**，不是 LLM 分类器；对应评测也是“策略层”评测，不衡量模型文采；
+- 混合检索的语义腿需要 PG + embedding key；本机无 key，端到端只验证了 lexical 腿与 RRF 纯函数，
+  PG 语义+词法融合的召回质量需在真实 embedding 环境补基准；
+- 12 条 Golden Cases 覆盖要求的高频场景，但不等价于线上全量分布。
+
 

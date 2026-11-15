@@ -242,6 +242,73 @@ for step in 1..AGENT_MAX_STEPS:
 
 ---
 
+### 5.7 认知层：意图路由、混合检索与评测（0.4.0）
+
+一次对话的认知链路：
+
+```
+历史消息 ──► compress_context ──► BuyerMemory（系统提示固定槽位）
+                                   │
+用户输入 ──► classify_intent ──► 裁剪后的 Tool 集合 ──► LLM 工具循环
+                                   │                         │
+                                   └── intent SSE 事件        ▼
+                                                     工具 Observation
+                                                           │
+                                       空结果/参数错误 ──► reflection_hint
+                                                           │（最多 1 次）
+                                                           ▼
+                                                     模型自主重试
+```
+
+**意图分流**（`chat/intent.py`，纯规则、无额外 LLM 调用）：
+
+| intent | 典型输入 | 挂载工具 |
+| --- | --- | --- |
+| `chitchat` | 闲聊 | 无 |
+| `policy_qa` | 退换货/防骗/运费/规则 | `search_platform_policy` |
+| `shopping_search` | 预算/推荐/比价/类目 | `search_items`、`search_web_price` |
+| `order_action` | 下单/订单/售后/地址 | `search_items`、`create_order`、`list_my_orders` |
+
+纯规则咨询不会挂 `create_order`/`search_web_price`，既省 token，也避免模型“顺手”越权调用。
+SSE 在 token 之前发送命名事件 `intent: {intent, tools}`，前端可显示“正在查询规则/商品”，
+原有 `tool_start/tool_end` 契约不变。
+
+**混合检索**（`shared/hybrid_rrf.py` + 两个 repository 的 `hybrid_search`）：
+
+- 向量可用时同时跑 pgvector 语义 Top-K 与关键词/结构化过滤 Top-K；
+- 用 RRF 融合：`score = Σ 1/(k + rank_i)`，默认 `k=60`；
+- 每条结果带 `match_reason`：`semantic | lexical | hybrid`；
+- SQLite 或没有 embedding key 时自动退化为 lexical，不影响可用性；
+- `search_items` 的 Schema 支持 `query / keyword / category / min_price / max_price / sort_by`，
+  模型先把“两千左右打 CS2 的显示器”拆成结构化条件再检索。
+
+**自愈反思**（`chat/reflection.py`）：
+
+- `search_items` 返回 0 条 → Observation 注入
+  `{"status":"empty","reflection_hint":"放宽价格上下限 20% 或使用上位词，最多重试 1 次"}`；
+- 参数校验失败 → `code=INVALID_ARGUMENTS` + 具体 issues + 修正提示；
+- 每个工具最多一次自动重试，之后明确要求模型停止重试并告知用户，防止死循环。
+
+**短期记忆**（`chat/memory.py`）：
+
+- 超过 `AGENT_CONTEXT_MESSAGES` 的早期消息提炼为 `BuyerMemory`：
+  `budget_max / preferred_categories / shipping_address / rejected_item_ids / summary`；
+- 追加到 System Prompt **末尾的固定槽位**，静态前缀保持不变，利于 Prefix Cache；
+- 无早期信息时不追加任何内容，避免无意义地改变 prompt。
+
+**离线评测 Harness**（`chat/eval_harness.py`）：
+
+- 12 条 Golden Cases，覆盖预算导购、零结果重写、政策 RAG、HITL、Prompt 注入、重复下单、缺地址等；
+- 指标：`tool_selection_accuracy`、`schema_valid_rate`、`hitl_guardrail_pass_rate`、
+  `fallback_recovery_rate`（另附 `idempotency_pass_rate`）；
+- `python -m src.app.modules.chat.eval_harness --format json|markdown`，不调用任何收费 API，
+  毫秒级完成；`tests/unit/test_agent_eval_harness.py` 将其作为 CI 门禁（全部核心指标 100%）。
+
+边界：`shared/hybrid_rrf.py`、`chat/intent.py`、`chat/reflection.py`、`chat/memory.py`、
+`chat/eval_harness.py` 都不 import FastAPI；HTTP 层只负责传参和 SSE 包装。
+
+---
+
 ## 6. 交易与 HITL
 
 ### 6.1 下单（防超卖）
@@ -360,7 +427,7 @@ stateDiagram-v2
 | `structlog` | 未使用 | 依赖未引入；自研 JSON formatter 覆盖相同能力，缺 `bind()` 链式 API |
 | OpenTelemetry 链路追踪 | 未接入 | 无 SDK；保留 `trace_id` 上下文与中间件挂载点，接入成本低 |
 | `mypy` 严格配置全绿 | 已达成（0.2.1） | `mypy src/app` → 0 errors，CI 已移除 `continue-on-error` |
-| 覆盖率 ≥80%（核心模块） | 已达成 | 行覆盖率 **80.27%**，CI 硬门禁 80%；分支覆盖率约 56%，后续提升 |
+| 覆盖率 ≥80%（核心模块） | 已达成 | 行覆盖率 **82.66%**，CI 硬门禁 80%；分支覆盖率约 56%，后续提升 |
 | Granian / uvloop | 未启用 | 镜像默认 uvicorn；Granian 是可选替换（见 RUNBOOK） |
 | Temporal / Taskiq | 未引入 | 自研 Redis Stream 队列满足当前规模；复杂长流程再引入 |
 | LangGraph runtime + checkpointer | 已接入（可选） | `AGENT_RUNTIME=langgraph`，独立 psycopg 池；真实 PG 测试通过，见 §6.4 |
@@ -378,7 +445,7 @@ stateDiagram-v2
 | 架构设计合理性 | 4 | 模块化单体、单向依赖、组合根、领域异常 | 用 `import-linter` 把分层规则变成 CI 门禁 |
 | 性能与可扩展性 | 4 | 全异步、连接池、两级缓存、原子 UPDATE、SSE 背压、压测报告 | 在 Linux runner 复跑基准；热点商品预扣/排队 |
 | 服务治理与稳定性 | 3 | 限流/超时/重试/退避、会话锁、审批超时、优雅停机 | 熔断器（半开/关闭）与降级开关；多副本演练 |
-| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、168 测试、uv.lock、迁移双向 | 分支覆盖率、依赖审计 |
+| 工程化成熟度 | 5 | ruff 0 告警、mypy 0 错误（硬门禁）、pre-commit、209 测试、uv.lock、迁移双向 | 分支覆盖率、依赖审计 |
 | 可观测性 | 3 | JSON 日志 + trace_id + 双探针 + 可选指标 | 接入 OTel/Prometheus + Grafana 面板与分级告警 |
 | 安全与合规 | 4 | JWT/密码/RBAC/上传/CORS/错误脱敏 | `pip-audit`、限流分级、敏感字段脱敏展示 |
 | 业务适配与演进能力 | 4 | 新增域只需加目录；任务/工具/审批即插即用 | 写 ADR、补 API 契约测试（Schemathesis） |

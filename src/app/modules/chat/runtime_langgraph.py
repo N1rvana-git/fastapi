@@ -42,6 +42,8 @@ from src.app.core.config import Settings
 from src.app.core.exceptions import ApprovalRequiredError, ConflictError
 from src.app.core.logging import get_logger
 from src.app.modules.chat import approvals
+from src.app.modules.chat.intent import INTENT_TOOLS, classify_intent
+from src.app.modules.chat.reflection import inject_reflection, is_error_result
 from src.app.modules.chat.stream_runtime import AgentEvent
 from src.app.modules.chat.tools import ToolContext, ToolDeps, execute_tool, openai_tools
 
@@ -52,6 +54,8 @@ class AgentState(TypedDict, total=False):
     messages: Annotated[list[BaseMessage], add_messages]
     user_id: int
     steps: int
+    intent: str
+    reflections: dict[str, int]
 
 
 @dataclass
@@ -62,6 +66,7 @@ class LangGraphAgentRuntime:
     checkpointer: Any
     max_steps: int = 6
     graph: Any = field(init=False)
+    _models: dict[str, Any] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         self.graph = self._build_graph()
@@ -83,8 +88,23 @@ class LangGraphAgentRuntime:
                 "messages": [AIMessage(content="这个需求有点复杂，我先为您转接人工客服，请稍等。")],
                 "steps": steps,
             }
-        response = await self.model.ainvoke(state["messages"])
+        intent = str(state.get("intent") or "shopping_search")
+        response = await self._model_for(intent).ainvoke(state["messages"])
         return {"messages": [response], "steps": steps}
+
+    def _model_for(self, intent: str) -> Any:
+        if intent in self._models:
+            return self._models[intent]
+        names = INTENT_TOOLS.get(intent, ())
+        if not names:
+            bound = self.model
+        else:
+            try:
+                bound = self.model.bind_tools(openai_tools(names))
+            except (AttributeError, TypeError):  # test doubles / non-tool models
+                bound = self.model
+        self._models[intent] = bound
+        return bound
 
     def _route(self, state: AgentState) -> str:
         last = state["messages"][-1]
@@ -94,8 +114,11 @@ class LangGraphAgentRuntime:
         config = get_config()
         thread_id = str(config.get("configurable", {}).get("thread_id", ""))
         user_id = int(state.get("user_id") or 0)
+        intent = str(state.get("intent") or "shopping_search")
+        allowed = set(INTENT_TOOLS.get(intent, ()))
         last = state["messages"][-1]
         results: list[ToolMessage] = []
+        reflections = dict(state.get("reflections") or {})
 
         for call in getattr(last, "tool_calls", []) or []:
             name = str(call.get("name", ""))
@@ -116,50 +139,71 @@ class LangGraphAgentRuntime:
             )
             interrupted = False
             ok = True
-            try:
-                content = await execute_tool(name, arguments, context)
-            except ApprovalRequiredError as exc:
-                interrupted = True
-                approval = await self._request_approval(
-                    thread_id=thread_id,
-                    user_id=user_id,
-                    action=name,
-                    details=exc.details,
-                    reason=exc.message,
-                )
-                decision = interrupt(
-                    {
-                        "approval_id": approval.id,
-                        "thread_id": thread_id,
-                        "action": name,
-                        "reason": approval.reason,
-                        "payload": exc.details,
-                        "message": (
-                            "这笔订单金额超过了自动授权额度，已提交人工审核。"
-                            "审核通过后会立即为您下单。"
-                        ),
-                        "expires_at": approval.expires_at.isoformat()
-                        if approval.expires_at
-                        else None,
-                    }
-                )
-                if isinstance(decision, dict) and decision.get("approved"):
-                    order_id = decision.get("order_id")
-                    content = (
-                        f"人工审核已通过，订单 #{order_id} 已创建。"
-                        if order_id
-                        else "人工审核已通过，订单已创建。"
-                    )
-                else:
-                    content = "人工审核未通过，本次下单已取消。"
-            except Exception as exc:
-                logger.exception("langgraph tool execution crashed", extra={"ctx_tool": name})
+            if name not in allowed:
                 ok = False
-                content = json.dumps({"status": "error", "message": str(exc)}, ensure_ascii=False)
-            results.append(ToolMessage(content=content, tool_call_id=tool_call_id))
+                content = json.dumps(
+                    {
+                        "status": "error",
+                        "code": "TOOL_NOT_ALLOWED",
+                        "message": f"当前意图 {intent} 不允许调用 {name}",
+                    },
+                    ensure_ascii=False,
+                )
+            else:
+                try:
+                    content = await execute_tool(name, arguments, context)
+                except ApprovalRequiredError as exc:
+                    interrupted = True
+                    approval = await self._request_approval(
+                        thread_id=thread_id,
+                        user_id=user_id,
+                        action=name,
+                        details=exc.details,
+                        reason=exc.message,
+                    )
+                    decision = interrupt(
+                        {
+                            "approval_id": approval.id,
+                            "thread_id": thread_id,
+                            "action": name,
+                            "reason": approval.reason,
+                            "payload": exc.details,
+                            "message": (
+                                "这笔订单金额超过了自动授权额度，已提交人工审核。"
+                                "审核通过后会立即为您下单。"
+                            ),
+                            "expires_at": approval.expires_at.isoformat()
+                            if approval.expires_at
+                            else None,
+                        }
+                    )
+                    if isinstance(decision, dict) and decision.get("approved"):
+                        order_id = decision.get("order_id")
+                        content = (
+                            f"人工审核已通过，订单 #{order_id} 已创建。"
+                            if order_id
+                            else "人工审核已通过，订单已创建。"
+                        )
+                    else:
+                        content = "人工审核未通过，本次下单已取消。"
+                except Exception as exc:
+                    logger.exception("langgraph tool execution crashed", extra={"ctx_tool": name})
+                    ok = False
+                    content = json.dumps(
+                        {"status": "error", "message": str(exc)}, ensure_ascii=False
+                    )
+
             if not interrupted:
+                content, reflections[name] = inject_reflection(
+                    content,
+                    tool=name,
+                    arguments=arguments,
+                    attempt=reflections.get(name, 0),
+                )
+                ok = not is_error_result(content)
                 _emit({"event": "tool_end", "name": name, "ok": ok})
-        return {"messages": results}
+            results.append(ToolMessage(content=content, tool_call_id=tool_call_id))
+        return {"messages": results, "reflections": reflections}
 
     # ------------------------------------------------------------------- run
     async def run(
@@ -184,13 +228,28 @@ class LangGraphAgentRuntime:
             )
 
         has_history = bool(snapshot.values.get("messages"))
+        last_user = next(
+            (
+                str(item.get("content") or "")
+                for item in reversed(messages)
+                if item.get("role") == "user"
+            ),
+            "",
+        )
+        decision = classify_intent(last_user)
+        yield AgentEvent("intent", {"intent": decision.intent, "tools": list(decision.tools)})
         payload: dict[str, Any] = (
-            {"messages": [HumanMessage(content=str(messages[-1]["content"]))], "user_id": user_id}
+            {
+                "messages": [HumanMessage(content=str(messages[-1]["content"]))],
+                "user_id": user_id,
+                "intent": decision.intent,
+            }
             if has_history and messages
             else {
                 "messages": _to_langchain(messages),
                 "user_id": user_id,
                 "steps": 0,
+                "intent": decision.intent,
             }
         )
 

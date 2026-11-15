@@ -28,13 +28,22 @@ from typing import Any, Literal, Protocol
 from src.app.core.exceptions import ApprovalRequiredError
 from src.app.core.logging import get_logger
 from src.app.modules.chat import approvals
+from src.app.modules.chat.intent import classify_intent
 from src.app.modules.chat.llm_gateway import LLMGateway
+from src.app.modules.chat.reflection import inject_reflection, is_error_result
 from src.app.modules.chat.tools import ToolContext, ToolDeps, execute_tool, openai_tools
 
 logger = get_logger(__name__)
 
 AgentEventType = Literal[
-    "token", "tool_start", "tool_end", "interrupt_required", "done", "error", "aborted"
+    "intent",
+    "token",
+    "tool_start",
+    "tool_end",
+    "interrupt_required",
+    "done",
+    "error",
+    "aborted",
 ]
 
 
@@ -76,6 +85,17 @@ class NativeAgentRuntime:
         cancel_event: asyncio.Event,
     ) -> AsyncIterator[AgentEvent]:
         working: list[dict[str, Any]] = list(messages[-self.context_messages :])
+        last_user = next(
+            (
+                str(item.get("content") or "")
+                for item in reversed(working)
+                if item.get("role") == "user"
+            ),
+            "",
+        )
+        decision = classify_intent(last_user)
+        yield AgentEvent("intent", {"intent": decision.intent, "tools": list(decision.tools)})
+        retry_counts: dict[str, int] = {}
 
         for step in range(1, self.max_steps + 1):
             if cancel_event.is_set():
@@ -85,7 +105,9 @@ class NativeAgentRuntime:
             tool_calls = []
             try:
                 async for event in self.gateway.stream_chat(
-                    working, tools=openai_tools(), cancel_event=cancel_event
+                    working,
+                    tools=openai_tools(decision.tools) if decision.tools else None,
+                    cancel_event=cancel_event,
                 ):
                     if event.type == "text" and event.text:
                         yield AgentEvent("token", {"text": event.text})
@@ -137,10 +159,12 @@ class NativeAgentRuntime:
                 yield AgentEvent(
                     "tool_start", {"name": call.name, "arguments": _safe_json(call.arguments)}
                 )
+                arguments: dict[str, Any] = {}
                 try:
-                    arguments = json.loads(call.arguments or "{}")
-                    if not isinstance(arguments, dict):
+                    parsed = json.loads(call.arguments or "{}")
+                    if not isinstance(parsed, dict):
                         raise ValueError("tool arguments must be a JSON object")
+                    arguments = parsed
                     result = await execute_tool(
                         call.name,
                         arguments,
@@ -189,9 +213,16 @@ class NativeAgentRuntime:
                     )
 
                 working.append({"role": "tool", "tool_call_id": call.id, "content": result})
+                augmented, retry_counts[call.name] = inject_reflection(
+                    result,
+                    tool=call.name,
+                    arguments=arguments,
+                    attempt=retry_counts.get(call.name, 0),
+                )
+                working[-1]["content"] = augmented
                 yield AgentEvent(
                     "tool_end",
-                    {"name": call.name, "ok": not result.startswith('{"status": "error"')},
+                    {"name": call.name, "ok": not is_error_result(augmented)},
                 )
 
         logger.warning("agent hit max steps", extra={"ctx_thread_id": thread_id})
