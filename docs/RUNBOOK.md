@@ -248,7 +248,7 @@ redis-cli XINFO GROUPS xianxiaobao:tasks      # pending / consumers
 | --- | --- | --- |
 | `DB_POOL_SIZE` | 10 × 副本数 < PG `max_connections` × 0.8 | 每副本独立池 |
 | `LLM_MAX_CONCURRENCY` | 上游 RPM / 平均响应秒数 | 先小后大，避免 429 |
-| `REDIS_MAX_CONNECTIONS` | 20 | 单进程 |
+| `REDIS_MAX_CONNECTIONS` | 100 | 单进程 |
 | `AGENT_STREAM_TTL_SECONDS` | 600 | 断线重连窗口 |
 | `AGENT_THREAD_LOCK_TTL` | 30 | Watchdog 每 10s 续期 |
 | `AGENT_MAX_STEPS` | 6 | 限制工具循环与费用 |
